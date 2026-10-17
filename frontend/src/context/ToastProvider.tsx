@@ -9,13 +9,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import Toast, { type ToastData, type ToastVariant } from "@/components/ui/Toast";
+import Toast, {
+  type ToastData,
+  type ToastVariant,
+} from "@/components/ui/Toast";
 
 /** Auto-dismiss delay per variant, in ms. `null` means "stays until updated or dismissed". */
 const DEFAULT_DURATIONS: Record<ToastVariant, number | null> = {
   pending: null,
   success: 5000,
   error: 7000,
+  info: 5000,
+  warning: 6000,
 };
 
 export interface ShowToastOptions {
@@ -70,9 +75,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   const scheduleAutoDismiss = useCallback(
-    (id: string, variant: ToastVariant, duration: number | null | undefined) => {
+    (
+      id: string,
+      variant: ToastVariant,
+      duration: number | null | undefined,
+    ) => {
       clearTimer(id);
-      const resolved = duration === undefined ? DEFAULT_DURATIONS[variant] : duration;
+      const resolved =
+        duration === undefined ? DEFAULT_DURATIONS[variant] : duration;
       if (resolved === null) return;
       timers.current.set(
         id,
@@ -109,7 +119,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       );
 
       if (patch.variant !== undefined || patch.duration !== undefined) {
-        scheduleAutoDismiss(id, patch.variant ?? existing.variant, patch.duration);
+        scheduleAutoDismiss(
+          id,
+          patch.variant ?? existing.variant,
+          patch.duration,
+        );
       }
     },
     [scheduleAutoDismiss],
@@ -124,7 +138,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, updateToast, dismissToast }}>
+    <ToastContext.Provider
+      value={{ toasts, showToast, updateToast, dismissToast }}
+    >
       {children}
       <div
         aria-label="Notifications"
