@@ -2,23 +2,34 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ArrowDownToLine, Target, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Target,
+  Users,
+} from "lucide-react";
 import { useSession } from "@/context/SessionProvider";
 import { useSavingsSummary } from "@/hooks/useSavingsSummary";
 import SummaryCards from "@/components/savings/SummaryCards";
 import DepositModal from "@/components/savings/DepositModal";
+import WithdrawModal from "@/components/savings/WithdrawModal";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 
 /**
  * Dashboard savings overview: per-product totals from `GET
  * /api/savings/summary`, plus quick actions for the flows a user reaches
- * for most (deposit, start a goal, start a group).
+ * for most (deposit, withdraw, start a goal, start a group).
  */
 export default function DashboardPage() {
   const { address } = useSession();
   const router = useRouter();
   const { summary, status, error, refetch } = useSavingsSummary(address);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+
+  const flexibleBalance =
+    summary?.products.find((p) => p.product === "flexible")?.total ?? "0";
 
   const isLoading = status === "loading";
 
@@ -42,7 +53,7 @@ export default function DashboardPage() {
               <h2 className="mb-3 text-sm font-medium text-muted">
                 Quick actions
               </h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <button
                   type="button"
                   onClick={() => setDepositOpen(true)}
@@ -55,6 +66,21 @@ export default function DashboardPage() {
                   />
                   <span className="text-sm font-medium text-foreground">
                     Deposit
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWithdrawOpen(true)}
+                  disabled={!address || !summary || BigInt(flexibleBalance) <= BigInt(0)}
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-card/70 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/50"
+                >
+                  <ArrowUpFromLine
+                    className="h-5 w-5 text-brand"
+                    aria-hidden="true"
+                  />
+                  <span className="text-sm font-medium text-foreground">
+                    Withdraw
                   </span>
                 </button>
 
@@ -90,6 +116,16 @@ export default function DashboardPage() {
           open={depositOpen}
           onClose={() => setDepositOpen(false)}
           account={address}
+        />
+      )}
+
+      {address && (
+        <WithdrawModal
+          open={withdrawOpen}
+          onClose={() => setWithdrawOpen(false)}
+          account={address}
+          balance={flexibleBalance}
+          onWithdrawn={refetch}
         />
       )}
     </div>
