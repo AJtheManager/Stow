@@ -221,6 +221,9 @@ stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
   depositors trust the admin key's operational security as much as the
   code itself. A timelock and/or a multisig admin are tracked as follow-up
   hardening, not part of this issue.
+- **Before upgrading:** work through the
+  [upgrade safety checklist](../UPGRADE_CHECKLIST.md), which covers storage
+  layout compatibility, entrypoint (selector) collisions and initialization.
 - **Events:** [`upgraded`](#upgraded).
 ```bash
 stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
