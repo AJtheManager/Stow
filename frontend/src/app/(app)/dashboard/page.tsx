@@ -2,23 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ArrowDownToLine, Target, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  ArrowDownToLine,
+  QrCode,
+  Target,
+  Users,
+} from "lucide-react";
 import { useSession } from "@/context/SessionProvider";
 import { useSavingsSummary } from "@/hooks/useSavingsSummary";
 import SummaryCards from "@/components/savings/SummaryCards";
 import DepositModal from "@/components/savings/DepositModal";
+import DepositQrModal from "@/components/savings/DepositQrModal";
+import SavingsStreakTracker from "@/components/savings/SavingsStreakTracker";
+import { useDepositHistory } from "@/hooks/useDepositHistory";
+import type { DepositQrAsset } from "@/lib/depositQr";
 import ErrorRetry from "@/components/ui/ErrorRetry";
+
+/** Assets offered in the deposit QR's SEP-7 payment request. USDC is only
+ * included when its issuer is configured, since a SEP-7 request for a
+ * non-native asset needs the issuer to be unambiguous. */
+const USDC_ISSUER = process.env.NEXT_PUBLIC_USDC_ISSUER;
+const DEPOSIT_QR_ASSETS: DepositQrAsset[] = [
+  { code: "XLM" },
+  ...(USDC_ISSUER ? [{ code: "USDC", issuer: USDC_ISSUER }] : []),
+];
 
 /**
  * Dashboard savings overview: per-product totals from `GET
  * /api/savings/summary`, plus quick actions for the flows a user reaches
- * for most (deposit, start a goal, start a group).
+ * for most (deposit, show a deposit QR code, start a goal, start a group)
+ * and the user's deposit streak.
  */
 export default function DashboardPage() {
   const { address } = useSession();
   const router = useRouter();
   const { summary, status, error, refetch } = useSavingsSummary(address);
+  // Declared after `useSavingsSummary` so the summary request is issued first.
+  const { deposits, status: depositsStatus } = useDepositHistory(address);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   const isLoading = status === "loading";
 
@@ -42,7 +65,7 @@ export default function DashboardPage() {
               <h2 className="mb-3 text-sm font-medium text-muted">
                 Quick actions
               </h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <button
                   type="button"
                   onClick={() => setDepositOpen(true)}
@@ -55,6 +78,18 @@ export default function DashboardPage() {
                   />
                   <span className="text-sm font-medium text-foreground">
                     Deposit
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setQrOpen(true)}
+                  disabled={!address}
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-card/70 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/50"
+                >
+                  <QrCode className="h-5 w-5 text-brand" aria-hidden="true" />
+                  <span className="text-sm font-medium text-foreground">
+                    Deposit QR
                   </span>
                 </button>
 
@@ -81,6 +116,14 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
+
+            {address && depositsStatus !== "error" && (
+              <SavingsStreakTracker
+                className="mt-8"
+                depositDates={deposits.map((d) => d.created_at)}
+                isLoading={depositsStatus === "loading"}
+              />
+            )}
           </>
         )}
       </div>
@@ -90,6 +133,15 @@ export default function DashboardPage() {
           open={depositOpen}
           onClose={() => setDepositOpen(false)}
           account={address}
+        />
+      )}
+
+      {address && (
+        <DepositQrModal
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          address={address}
+          assets={DEPOSIT_QR_ASSETS}
         />
       )}
     </div>
