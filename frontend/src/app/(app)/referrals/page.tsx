@@ -123,7 +123,7 @@ export default function ReferralsPage() {
                     type="button"
                     onClick={handleCopy}
                     aria-label="Copy referral link"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background-elevated text-muted transition-colors hover:bg-white/5 hover:text-foreground"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background-elevated text-muted transition-colors hover:bg-foreground/5 hover:text-foreground"
                   >
                     {copyStatus === "copied" ? (
                       <Check className="h-4 w-4 text-brand" />

@@ -3,10 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import ErrorRetry from "@/components/ui/ErrorRetry";
-import PushNotificationPanel from "@/components/notifications/PushNotificationPanel";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { useTranslation } from "@/context/I18nProvider";
-import { Settings, Bell, BellOff, Clock, Loader2, Globe } from "lucide-react";
+import AppearanceSettings from "@/components/settings/AppearanceSettings";
+import { Settings, Bell, BellOff, Clock, Loader2 } from "lucide-react";
 
 interface NotificationCategory {
   id: string;
@@ -162,11 +160,11 @@ export default function SettingsPage() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
             <Settings className="h-7 w-7 sm:h-8 sm:w-8 text-brand shrink-0" />
             <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
-              Notification Settings
+              Settings
             </h1>
           </div>
           <p className="text-muted">
-            Manage your notification preferences and quiet hours.
+            Manage your appearance, notification preferences and quiet hours.
           </p>
         </div>
 
@@ -181,6 +179,10 @@ export default function SettingsPage() {
             {error.message}
           </div>
         )}
+
+        <div className="mb-6">
+          <AppearanceSettings />
+        </div>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

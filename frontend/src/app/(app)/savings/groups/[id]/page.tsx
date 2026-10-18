@@ -8,6 +8,10 @@ import { formatStroopsAmount } from "@/lib/currency";
 import { useSession } from "@/context/SessionProvider";
 import GroupSplitSharesEditor from "@/components/savings/GroupSplitSharesEditor";
 import GroupSettleView from "@/components/savings/GroupSettleView";
+import GroupLeaderboard from "@/components/savings/GroupLeaderboard";
+
+/** How often the group (and its leaderboard) refreshes in the background. */
+const GROUP_POLL_INTERVAL_MS = 15_000;
 
 export default function GroupDetailPage({
   params,
@@ -26,7 +30,9 @@ export default function GroupDetailPage({
     };
   }, [params]);
 
-  const { group, status, error, refetch } = useGroupDetail(id);
+  const { group, status, error, updatedAt, refetch } = useGroupDetail(id, {
+    pollIntervalMs: GROUP_POLL_INTERVAL_MS,
+  });
   const { address } = useSession();
 
   if (id === null || status === "loading") {
@@ -123,6 +129,16 @@ export default function GroupDetailPage({
             </ul>
           )}
         </div>
+
+        {group.members.length > 0 && (
+          <div className="mt-6">
+            <GroupLeaderboard
+              members={group.members}
+              currentAddress={address}
+              updatedAt={updatedAt}
+            />
+          </div>
+        )}
 
         {!group.settled && (
           <div className="mt-6">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, QrCode, X } from "lucide-react";
 import QRCode from "qrcode";
+import { copyToClipboard } from "@/lib/clipboard";
 
 type CopyStatus = "idle" | "copied" | "error";
 
@@ -16,31 +17,6 @@ export interface AddressBadgeProps {
 function truncateAddress(address: string, visibleChars: number): string {
   if (address.length <= visibleChars * 2 + 1) return address;
   return `${address.slice(0, visibleChars)}\u2026${address.slice(-visibleChars)}`;
-}
-
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-    throw new Error("Clipboard API unavailable");
-  } catch {
-    try {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const success = document.execCommand("copy");
-      document.body.removeChild(textarea);
-      return success;
-    } catch {
-      return false;
-    }
-  }
 }
 
 export default function AddressBadge({
@@ -105,7 +81,7 @@ export default function AddressBadge({
           onClick={handleCopy}
           aria-label="Copy address"
           title="Copy address"
-          className="ml-1 flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/5 hover:text-foreground"
+          className="ml-1 flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-foreground/5 hover:text-foreground"
         >
           {status === "copied" ? (
             <Check className="h-4 w-4 text-brand" />
@@ -119,7 +95,7 @@ export default function AddressBadge({
           onClick={() => setQrOpen(true)}
           aria-label="Show QR code"
           title="Show QR code"
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/5 hover:text-foreground"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-foreground/5 hover:text-foreground"
         >
           <QrCode className="h-4 w-4" />
         </button>
@@ -147,7 +123,7 @@ export default function AddressBadge({
               type="button"
               onClick={() => setQrOpen(false)}
               aria-label="Close"
-              className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/5 hover:text-foreground"
+              className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-foreground/5 hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
@@ -169,7 +145,7 @@ export default function AddressBadge({
               <div
                 role="status"
                 aria-label="Generating QR code"
-                className="h-[220px] w-[220px] animate-pulse rounded-lg bg-white/5"
+                className="h-[220px] w-[220px] animate-pulse rounded-lg bg-foreground/5"
               />
             )}
 

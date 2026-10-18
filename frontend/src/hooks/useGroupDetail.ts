@@ -26,13 +26,28 @@ export interface UseGroupDetailReturn {
   group: GroupDetail | null;
   status: GroupDetailStatus;
   error: Error | null;
+  /** When `group` was last successfully loaded (initial fetch or background poll). */
+  updatedAt: Date | null;
   refetch: () => void;
 }
 
-export function useGroupDetail(groupId: string | null): UseGroupDetailReturn {
+export interface UseGroupDetailOptions {
+  /**
+   * When set, re-fetches the group every `pollIntervalMs` in the background
+   * (without flipping `status` back to "loading"), so views like the
+   * contribution leaderboard stay up to date in near real time.
+   */
+  pollIntervalMs?: number;
+}
+
+export function useGroupDetail(
+  groupId: string | null,
+  { pollIntervalMs }: UseGroupDetailOptions = {},
+): UseGroupDetailReturn {
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [status, setStatus] = useState<GroupDetailStatus>("loading");
   const [error, setError] = useState<Error | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [refetchCount, setRefetchCount] = useState(0);
 
   const fetchGroup = useCallback(async () => {
@@ -59,6 +74,7 @@ export function useGroupDetail(groupId: string | null): UseGroupDetailReturn {
 
       const data: GroupDetail = await response.json();
       setGroup(data);
+      setUpdatedAt(new Date());
       setStatus("ready");
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Unknown error occurred"));
@@ -70,9 +86,33 @@ export function useGroupDetail(groupId: string | null): UseGroupDetailReturn {
     fetchGroup();
   }, [fetchGroup, refetchCount]);
 
+  useEffect(() => {
+    if (groupId === null || !pollIntervalMs || pollIntervalMs <= 0) return;
+
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const response = await apiFetch(`/api/savings/groups/${groupId}`);
+        if (!response.ok) return; // keep showing the last good snapshot
+        const data: GroupDetail = await response.json();
+        if (!cancelled) {
+          setGroup(data);
+          setUpdatedAt(new Date());
+        }
+      } catch {
+        // Background refresh failures are non-fatal; the next tick retries.
+      }
+    }, pollIntervalMs);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [groupId, pollIntervalMs]);
+
   const refetch = useCallback(() => {
     setRefetchCount((c) => c + 1);
   }, []);
 
-  return { group, status, error, refetch };
+  return { group, status, error, updatedAt, refetch };
 }

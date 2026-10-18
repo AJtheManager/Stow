@@ -4,6 +4,9 @@ import SettingsPage from "./page";
 import * as api from "@/lib/api";
 
 jest.mock("@/lib/api");
+jest.mock("@/context/ThemeProvider", () => ({
+  useTheme: () => ({ preference: "system", setPreference: jest.fn() }),
+}));
 
 const mockApiFetch = api.apiFetch as jest.MockedFunction<typeof api.apiFetch>;
 

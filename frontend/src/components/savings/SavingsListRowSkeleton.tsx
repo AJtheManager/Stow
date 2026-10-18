@@ -16,13 +16,13 @@ export default function SavingsListRowSkeleton({
       className={`flex animate-pulse items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 ${className}`}
     >
       <div className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-full bg-white/5" />
+        <div className="h-9 w-9 rounded-full bg-foreground/5" />
         <div>
-          <div className="h-3 w-28 rounded bg-white/5" />
-          <div className="mt-2 h-2 w-16 rounded bg-white/5" />
+          <div className="h-3 w-28 rounded bg-foreground/5" />
+          <div className="mt-2 h-2 w-16 rounded bg-foreground/5" />
         </div>
       </div>
-      <div className="h-3 w-16 rounded bg-white/5" />
+      <div className="h-3 w-16 rounded bg-foreground/5" />
       <span className="sr-only">Loading item</span>
     </div>
   );
