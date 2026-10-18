@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, QrCode, X } from "lucide-react";
 import QRCode from "qrcode";
+import { copyToClipboard } from "@/lib/clipboard";
 
 type CopyStatus = "idle" | "copied" | "error";
 
@@ -16,31 +17,6 @@ export interface AddressBadgeProps {
 function truncateAddress(address: string, visibleChars: number): string {
   if (address.length <= visibleChars * 2 + 1) return address;
   return `${address.slice(0, visibleChars)}\u2026${address.slice(-visibleChars)}`;
-}
-
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-    throw new Error("Clipboard API unavailable");
-  } catch {
-    try {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const success = document.execCommand("copy");
-      document.body.removeChild(textarea);
-      return success;
-    } catch {
-      return false;
-    }
-  }
 }
 
 export default function AddressBadge({

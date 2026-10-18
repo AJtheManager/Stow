@@ -16,6 +16,15 @@ import DepositModal from "@/components/savings/DepositModal";
 import WithdrawModal from "@/components/savings/WithdrawModal";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 
+/** Assets offered in the deposit QR's SEP-7 payment request. USDC is only
+ * included when its issuer is configured, since a SEP-7 request for a
+ * non-native asset needs the issuer to be unambiguous. */
+const USDC_ISSUER = process.env.NEXT_PUBLIC_USDC_ISSUER;
+const DEPOSIT_QR_ASSETS: DepositQrAsset[] = [
+  { code: "XLM" },
+  ...(USDC_ISSUER ? [{ code: "USDC", issuer: USDC_ISSUER }] : []),
+];
+
 /**
  * Dashboard savings overview: per-product totals from `GET
  * /api/savings/summary`, plus quick actions for the flows a user reaches
@@ -25,6 +34,8 @@ export default function DashboardPage() {
   const { address } = useSession();
   const router = useRouter();
   const { summary, status, error, refetch } = useSavingsSummary(address);
+  // Declared after `useSavingsSummary` so the summary request is issued first.
+  const { deposits, status: depositsStatus } = useDepositHistory(address);
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
@@ -107,6 +118,14 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
+
+            {address && depositsStatus !== "error" && (
+              <SavingsStreakTracker
+                className="mt-8"
+                depositDates={deposits.map((d) => d.created_at)}
+                isLoading={depositsStatus === "loading"}
+              />
+            )}
           </>
         )}
       </div>

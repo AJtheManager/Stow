@@ -3,10 +3,19 @@
 import { useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useCreateGoal } from "@/hooks/useCreateGoal";
+import GoalTemplatePicker from "@/components/savings/GoalTemplatePicker";
+import {
+  getGoalTemplate,
+  recommendedMonthlyContribution,
+  type GoalTemplate,
+} from "@/lib/goalTemplates";
+import { formatNumber } from "@/lib/currency";
 
 export interface GoalFormProps {
   /** Called with the newly created goal's on-chain id once creation succeeds. */
   onCreated: (goalId: string) => void;
+  /** Id of a goal template (see `GOAL_TEMPLATES`) to pre-fill the form with. */
+  initialTemplateId?: string | null;
 }
 
 const STROOPS_PER_XLM = 10_000_000;
@@ -29,9 +38,20 @@ function parseXlmToStroops(value: string): string | null {
   return Math.floor(xlm * STROOPS_PER_XLM).toString();
 }
 
-export default function GoalForm({ onCreated }: GoalFormProps) {
-  const [name, setName] = useState("");
-  const [targetAmount, setTargetAmount] = useState("");
+export default function GoalForm({
+  onCreated,
+  initialTemplateId = null,
+}: GoalFormProps) {
+  const initialTemplate = initialTemplateId
+    ? getGoalTemplate(initialTemplateId)
+    : undefined;
+  const [templateId, setTemplateId] = useState<string | null>(
+    initialTemplate?.id ?? null,
+  );
+  const [name, setName] = useState(initialTemplate?.name ?? "");
+  const [targetAmount, setTargetAmount] = useState(
+    initialTemplate?.targetAmount ?? "",
+  );
   const [showConfirm, setShowConfirm] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const { status, error, isLoading, createGoal } = useCreateGoal();
@@ -39,6 +59,20 @@ export default function GoalForm({ onCreated }: GoalFormProps) {
   const trimmedName = name.trim();
   const stroops = parseXlmToStroops(targetAmount);
   const canSubmit = trimmedName !== "" && stroops !== null;
+  const selectedTemplate = templateId ? getGoalTemplate(templateId) : undefined;
+  const monthlyPace = selectedTemplate
+    ? recommendedMonthlyContribution(
+        targetAmount,
+        selectedTemplate.recommendedMonths,
+      )
+    : null;
+
+  const handleSelectTemplate = (template: GoalTemplate) => {
+    setTemplateId(template.id);
+    setName(template.name);
+    setTargetAmount(template.targetAmount);
+    setValidationError(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +154,11 @@ export default function GoalForm({ onCreated }: GoalFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <GoalTemplatePicker
+        selectedId={templateId}
+        onSelect={handleSelectTemplate}
+      />
+
       <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
         <div>
           <label
@@ -158,6 +197,14 @@ export default function GoalForm({ onCreated }: GoalFormProps) {
             className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/50"
             required
           />
+          {selectedTemplate && monthlyPace !== null && (
+            <p className="mt-2 text-xs text-muted">
+              Save about{" "}
+              {formatNumber(monthlyPace, { maximumFractionDigits: 2 })} XLM a
+              month to reach this in {selectedTemplate.recommendedMonths}{" "}
+              months.
+            </p>
+          )}
         </div>
       </div>
 

@@ -41,6 +41,18 @@ export { default as YieldOptInFlow } from "./YieldOptInFlow";
 export type { YieldOptInFlowProps, YieldOptInStep } from "./YieldOptInFlow";
 export { default as YieldPositionCard } from "./YieldPositionCard";
 export type { YieldPosition, YieldPositionCardProps } from "./YieldPositionCard";
+export { default as GoalTemplatePicker } from "./GoalTemplatePicker";
+export type { GoalTemplatePickerProps } from "./GoalTemplatePicker";
+export { default as DepositQrModal } from "./DepositQrModal";
+export type { DepositQrModalProps } from "./DepositQrModal";
+export { default as GroupLeaderboard } from "./GroupLeaderboard";
+export type {
+  GroupLeaderboardProps,
+  LeaderboardIdentityMode,
+  LeaderboardAmountMode,
+} from "./GroupLeaderboard";
+export { default as SavingsStreakTracker } from "./SavingsStreakTracker";
+export type { SavingsStreakTrackerProps } from "./SavingsStreakTracker";
 export {
   default as EmptyState,
   GoalsEmptyState,
