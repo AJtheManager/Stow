@@ -38,6 +38,33 @@
   }
 }
 
+/* Status text (errors, success, warnings) is written with the pale 300/400
+   shades, which are tuned for the dark theme. In light mode, darken them so
+   that text keeps enough contrast against the light background. */
+:root[data-theme="light"] {
+  --color-red-300: oklch(50.5% 0.213 27.518);
+  --color-red-400: oklch(50.5% 0.213 27.518);
+  --color-green-400: oklch(52.7% 0.154 150.069);
+  --color-emerald-400: oklch(50.8% 0.118 165.612);
+  --color-amber-400: oklch(55.5% 0.163 48.998);
+  --color-yellow-300: oklch(55.4% 0.135 66.442);
+  --color-yellow-400: oklch(55.4% 0.135 66.442);
+  --color-blue-400: oklch(48.8% 0.243 264.376);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-red-300: oklch(50.5% 0.213 27.518);
+    --color-red-400: oklch(50.5% 0.213 27.518);
+    --color-green-400: oklch(52.7% 0.154 150.069);
+    --color-emerald-400: oklch(50.8% 0.118 165.612);
+    --color-amber-400: oklch(55.5% 0.163 48.998);
+    --color-yellow-300: oklch(55.4% 0.135 66.442);
+    --color-yellow-400: oklch(55.4% 0.135 66.442);
+    --color-blue-400: oklch(48.8% 0.243 264.376);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-background-elevated: var(--background-elevated);

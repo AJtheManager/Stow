@@ -17,8 +17,8 @@ export default function AprDisplaySkeleton({
       data-testid="apr-display-skeleton"
       className={`inline-flex items-center gap-1.5 animate-pulse align-middle ${className}`}
     >
-      <span className="h-4 w-10 rounded bg-white/5" />
-      <span className="h-4 w-12 rounded bg-white/5" />
+      <span className="h-4 w-10 rounded bg-foreground/5" />
+      <span className="h-4 w-12 rounded bg-foreground/5" />
       <span className="sr-only">Loading APR</span>
     </span>
   );

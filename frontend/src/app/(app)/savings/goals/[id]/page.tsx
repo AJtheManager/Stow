@@ -165,7 +165,7 @@ export default function GoalDetailPage({
           <p className="text-2xl font-semibold text-foreground">
             {formatStroopsAmount(goal.current_amount)} / {formatStroopsAmount(goal.target_amount)} XLM
           </p>
-          <div className="mt-3 h-2 w-full rounded-full bg-white/5">
+          <div className="mt-3 h-2 w-full rounded-full bg-foreground/5">
             <div
               className="h-2 rounded-full bg-brand transition-[width] duration-300"
               style={{ width: `${percentage}%` }}
