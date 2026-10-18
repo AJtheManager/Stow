@@ -41,6 +41,8 @@ export { default as YieldOptInFlow } from "./YieldOptInFlow";
 export type { YieldOptInFlowProps, YieldOptInStep } from "./YieldOptInFlow";
 export { default as YieldPositionCard } from "./YieldPositionCard";
 export type { YieldPosition, YieldPositionCardProps } from "./YieldPositionCard";
+export { default as SavingsCalculator } from "./SavingsCalculator";
+export type { SavingsCalculatorProps } from "./SavingsCalculator";
 export {
   default as EmptyState,
   GoalsEmptyState,

@@ -7,12 +7,14 @@ import { useSession } from "@/context/SessionProvider";
 import { useSavingsSummary } from "@/hooks/useSavingsSummary";
 import SummaryCards from "@/components/savings/SummaryCards";
 import DepositModal from "@/components/savings/DepositModal";
+import SavingsCalculator from "@/components/savings/SavingsCalculator";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 
 /**
  * Dashboard savings overview: per-product totals from `GET
  * /api/savings/summary`, plus quick actions for the flows a user reaches
- * for most (deposit, start a goal, start a group).
+ * for most (deposit, start a goal, start a group), and a calculator for
+ * projecting how long a savings goal will take.
  */
 export default function DashboardPage() {
   const { address } = useSession();
@@ -81,6 +83,8 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
+
+            <SavingsCalculator className="mt-8" />
           </>
         )}
       </div>

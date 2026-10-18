@@ -77,6 +77,34 @@ environment (or set it to `false`) and rebuild — since `NEXT_PUBLIC_*`
 variables are inlined at build time, changing it requires a rebuild to take
 effect.
 
+### Browser push notifications (optional)
+
+Users can turn on browser push notifications per device from **Settings**.
+Permission and local test notifications work without configuration; to have
+the backend deliver pushes, set the public half of your VAPID key pair:
+
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — base64url VAPID public key. When set, the
+  device's push subscription is registered with
+  `POST /api/user/push-subscriptions`. See [`src/lib/push.ts`](src/lib/push.ts)
+  and the service worker at [`public/sw.js`](public/sw.js).
+
+## Translations
+
+UI strings live in `src/i18n/locales/<code>.json` and are read with
+`useTranslation()` from [`src/context/I18nProvider.tsx`](src/context/I18nProvider.tsx):
+
+```tsx
+const { t, locale, setLocale } = useTranslation();
+t("calculator.title");                 // "Savings calculator"
+t("calculator.months", { count: 3 });  // plural forms: "3 months"
+```
+
+To add a language, copy `en.json`, translate it, and register it in
+[`src/i18n/messages.ts`](src/i18n/messages.ts) and
+[`src/i18n/config.ts`](src/i18n/config.ts). Missing keys fall back to English.
+The chosen language is remembered per browser, and first-time visitors get
+their browser's language when it's supported.
+
 ## Folder Structure
 
 ```

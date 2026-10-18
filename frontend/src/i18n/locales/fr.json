@@ -1,0 +1,58 @@
+{
+  "language": {
+    "label": "Langue",
+    "title": "Langue",
+    "description": "Choisissez la langue d'affichage de Stow."
+  },
+  "nav": {
+    "menu": "Menu",
+    "openMenu": "Ouvrir le menu de navigation",
+    "closeMenu": "Fermer le menu de navigation",
+    "appNavigation": "Navigation de l'application",
+    "dashboard": "Tableau de bord",
+    "newGoal": "Nouvel objectif",
+    "newGroup": "Nouveau groupe",
+    "deposit": "Déposer",
+    "withdraw": "Retirer",
+    "referrals": "Parrainages",
+    "settings": "Paramètres"
+  },
+  "calculator": {
+    "title": "Calculateur d'épargne",
+    "description": "Estimez le temps nécessaire pour atteindre un objectif, rendement compris.",
+    "goalAmount": "Montant de l'objectif",
+    "initialDeposit": "Dépôt initial",
+    "monthlyContribution": "Versement mensuel",
+    "apr": "TAEG estimé",
+    "timeToGoal": "Délai estimé pour l'objectif",
+    "alreadyReached": "Objectif déjà atteint",
+    "months": { "one": "{count} mois", "other": "{count} mois" },
+    "years": { "one": "{count} an", "other": "{count} ans" },
+    "yearsAndMonths": "{years} et {months}",
+    "targetDate": "Vers {date}",
+    "unreachable": "À ce rythme, l'objectif ne sera pas atteint en {years} ans. Essayez un versement mensuel plus élevé.",
+    "totalContributed": "Vous déposez",
+    "yieldEarned": "Rendement gagné",
+    "finalBalance": "Solde final",
+    "yieldShare": "{percent} % du solde final provient du rendement",
+    "yieldProjections": "Projections de rendement",
+    "horizon": "Après",
+    "balance": "Solde",
+    "disclaimer": "Les projections supposent un TAEG constant avec capitalisation mensuelle. Le rendement réel varie et n'est pas garanti."
+  },
+  "push": {
+    "title": "Notifications push du navigateur",
+    "enable": "Activer les notifications push sur cet appareil",
+    "toggle": "Basculer les notifications push du navigateur",
+    "toggleEvent": "Notifications push pour {event}",
+    "statusOn": "Les notifications push sont activées pour ce navigateur.",
+    "statusOff": "Recevez des alertes même lorsque Stow n'est pas ouvert.",
+    "statusBlocked": "Les notifications sont bloquées. Autorisez-les dans les paramètres du site de votre navigateur.",
+    "statusUnsupported": "Ce navigateur ne prend pas en charge les notifications push.",
+    "eventsHint": "Choisissez les événements qui envoient une notification à cet appareil :",
+    "sendTest": "Envoyer une notification de test",
+    "testTitle": "Les notifications Stow sont activées",
+    "testBody": "Vous recevrez ici des alertes pour les événements sélectionnés.",
+    "error": "Une erreur est survenue lors de la mise à jour des notifications push."
+  }
+}

@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/context/SessionProvider";
+import NavDrawer from "@/components/app/NavDrawer";
 
 /**
  * Gates every route under (app) on an authenticated session. SessionProvider
@@ -28,5 +29,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <NavDrawer />
+      {children}
+    </>
+  );
 }

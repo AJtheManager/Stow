@@ -3,7 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import ErrorRetry from "@/components/ui/ErrorRetry";
-import { Settings, Bell, BellOff, Clock, Loader2 } from "lucide-react";
+import PushNotificationPanel from "@/components/notifications/PushNotificationPanel";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useTranslation } from "@/context/I18nProvider";
+import { Settings, Bell, BellOff, Clock, Loader2, Globe } from "lucide-react";
 
 interface NotificationCategory {
   id: string;
@@ -45,6 +48,7 @@ const notificationCategories: NotificationCategory[] = [
 ];
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     savingsReminders: true,
     goalProgress: true,
@@ -239,6 +243,9 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Browser Push Notifications */}
+            <PushNotificationPanel eventTypes={notificationCategories} />
+
             {/* Quiet Hours */}
             <div className="rounded-2xl border border-border bg-card p-6">
               <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -314,6 +321,18 @@ export default function SettingsPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Language */}
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+                <Globe className="h-5 w-5" />
+                {t("language.title")}
+              </h2>
+              <p className="text-xs text-muted mb-4">
+                {t("language.description")}
+              </p>
+              <LanguageSwitcher className="max-w-xs" />
             </div>
 
             {/* Additional Info */}
