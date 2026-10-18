@@ -1,0 +1,58 @@
+{
+  "language": {
+    "label": "Idioma",
+    "title": "Idioma",
+    "description": "Elige el idioma en el que se muestra Stow."
+  },
+  "nav": {
+    "menu": "Menú",
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú de navegación",
+    "appNavigation": "Navegación de la app",
+    "dashboard": "Panel",
+    "newGoal": "Nueva meta",
+    "newGroup": "Nuevo grupo",
+    "deposit": "Depositar",
+    "withdraw": "Retirar",
+    "referrals": "Referidos",
+    "settings": "Ajustes"
+  },
+  "calculator": {
+    "title": "Calculadora de ahorro",
+    "description": "Estima cuánto tardarás en alcanzar una meta, incluido el rendimiento.",
+    "goalAmount": "Monto de la meta",
+    "initialDeposit": "Depósito inicial",
+    "monthlyContribution": "Aporte mensual",
+    "apr": "TAE estimada",
+    "timeToGoal": "Tiempo estimado para la meta",
+    "alreadyReached": "Meta ya alcanzada",
+    "months": { "one": "{count} mes", "other": "{count} meses" },
+    "years": { "one": "{count} año", "other": "{count} años" },
+    "yearsAndMonths": "{years} y {months}",
+    "targetDate": "Hacia {date}",
+    "unreachable": "A este ritmo la meta no se alcanzará en {years} años. Prueba con un aporte mensual mayor.",
+    "totalContributed": "Depositas",
+    "yieldEarned": "Rendimiento obtenido",
+    "finalBalance": "Saldo final",
+    "yieldShare": "El {percent}% del saldo final proviene del rendimiento",
+    "yieldProjections": "Proyecciones de rendimiento",
+    "horizon": "Después de",
+    "balance": "Saldo",
+    "disclaimer": "Las proyecciones suponen una TAE constante con capitalización mensual. El rendimiento real varía y no está garantizado."
+  },
+  "push": {
+    "title": "Notificaciones push del navegador",
+    "enable": "Activar notificaciones push en este dispositivo",
+    "toggle": "Alternar notificaciones push del navegador",
+    "toggleEvent": "Notificaciones push para {event}",
+    "statusOn": "Las notificaciones push están activadas en este navegador.",
+    "statusOff": "Recibe alertas incluso cuando Stow no está abierto.",
+    "statusBlocked": "Las notificaciones están bloqueadas. Permítelas en la configuración del sitio de tu navegador.",
+    "statusUnsupported": "Este navegador no admite notificaciones push.",
+    "eventsHint": "Elige qué eventos envían una notificación a este dispositivo:",
+    "sendTest": "Enviar notificación de prueba",
+    "testTitle": "Las notificaciones de Stow están activadas",
+    "testBody": "Recibirás aquí alertas de los eventos que seleccionaste.",
+    "error": "Algo salió mal al actualizar las notificaciones push."
+  }
+}

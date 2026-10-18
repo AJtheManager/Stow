@@ -1,0 +1,58 @@
+{
+  "language": {
+    "label": "Language",
+    "title": "Language",
+    "description": "Choose the language Stow is displayed in."
+  },
+  "nav": {
+    "menu": "Menu",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "appNavigation": "App navigation",
+    "dashboard": "Dashboard",
+    "newGoal": "New goal",
+    "newGroup": "New group",
+    "deposit": "Deposit",
+    "withdraw": "Withdraw",
+    "referrals": "Referrals",
+    "settings": "Settings"
+  },
+  "calculator": {
+    "title": "Savings calculator",
+    "description": "Estimate how long it will take to reach a goal, including yield.",
+    "goalAmount": "Goal amount",
+    "initialDeposit": "Initial deposit",
+    "monthlyContribution": "Monthly contribution",
+    "apr": "Estimated APR",
+    "timeToGoal": "Estimated time to goal",
+    "alreadyReached": "Goal already reached",
+    "months": { "one": "{count} month", "other": "{count} months" },
+    "years": { "one": "{count} year", "other": "{count} years" },
+    "yearsAndMonths": "{years}, {months}",
+    "targetDate": "Around {date}",
+    "unreachable": "At this rate the goal won't be reached within {years} years. Try a larger monthly contribution.",
+    "totalContributed": "You deposit",
+    "yieldEarned": "Yield earned",
+    "finalBalance": "Final balance",
+    "yieldShare": "{percent}% of the final balance comes from yield",
+    "yieldProjections": "Yield projections",
+    "horizon": "After",
+    "balance": "Balance",
+    "disclaimer": "Projections assume a constant APR compounded monthly. Actual yield varies and is not guaranteed."
+  },
+  "push": {
+    "title": "Browser Push Notifications",
+    "enable": "Enable push notifications on this device",
+    "toggle": "Toggle browser push notifications",
+    "toggleEvent": "Push notifications for {event}",
+    "statusOn": "Push notifications are on for this browser.",
+    "statusOff": "Get alerts even when Stow isn't open.",
+    "statusBlocked": "Notifications are blocked. Allow them in your browser's site settings to turn this on.",
+    "statusUnsupported": "This browser doesn't support push notifications.",
+    "eventsHint": "Choose which events send a push to this device:",
+    "sendTest": "Send test notification",
+    "testTitle": "Stow notifications are on",
+    "testBody": "You'll get alerts here for the events you selected.",
+    "error": "Something went wrong updating push notifications."
+  }
+}
