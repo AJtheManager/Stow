@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   ArrowDownToLine,
-  QrCode,
+  ArrowUpFromLine,
   Target,
   Users,
 } from "lucide-react";
@@ -13,10 +13,7 @@ import { useSession } from "@/context/SessionProvider";
 import { useSavingsSummary } from "@/hooks/useSavingsSummary";
 import SummaryCards from "@/components/savings/SummaryCards";
 import DepositModal from "@/components/savings/DepositModal";
-import DepositQrModal from "@/components/savings/DepositQrModal";
-import SavingsStreakTracker from "@/components/savings/SavingsStreakTracker";
-import { useDepositHistory } from "@/hooks/useDepositHistory";
-import type { DepositQrAsset } from "@/lib/depositQr";
+import WithdrawModal from "@/components/savings/WithdrawModal";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 
 /** Assets offered in the deposit QR's SEP-7 payment request. USDC is only
@@ -31,8 +28,7 @@ const DEPOSIT_QR_ASSETS: DepositQrAsset[] = [
 /**
  * Dashboard savings overview: per-product totals from `GET
  * /api/savings/summary`, plus quick actions for the flows a user reaches
- * for most (deposit, show a deposit QR code, start a goal, start a group)
- * and the user's deposit streak.
+ * for most (deposit, withdraw, start a goal, start a group).
  */
 export default function DashboardPage() {
   const { address } = useSession();
@@ -41,7 +37,10 @@ export default function DashboardPage() {
   // Declared after `useSavingsSummary` so the summary request is issued first.
   const { deposits, status: depositsStatus } = useDepositHistory(address);
   const [depositOpen, setDepositOpen] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+
+  const flexibleBalance =
+    summary?.products.find((p) => p.product === "flexible")?.total ?? "0";
 
   const isLoading = status === "loading";
 
@@ -83,13 +82,16 @@ export default function DashboardPage() {
 
                 <button
                   type="button"
-                  onClick={() => setQrOpen(true)}
-                  disabled={!address}
+                  onClick={() => setWithdrawOpen(true)}
+                  disabled={!address || !summary || BigInt(flexibleBalance) <= BigInt(0)}
                   className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-card/70 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/50"
                 >
-                  <QrCode className="h-5 w-5 text-brand" aria-hidden="true" />
+                  <ArrowUpFromLine
+                    className="h-5 w-5 text-brand"
+                    aria-hidden="true"
+                  />
                   <span className="text-sm font-medium text-foreground">
-                    Deposit QR
+                    Withdraw
                   </span>
                 </button>
 
@@ -137,11 +139,12 @@ export default function DashboardPage() {
       )}
 
       {address && (
-        <DepositQrModal
-          open={qrOpen}
-          onClose={() => setQrOpen(false)}
-          address={address}
-          assets={DEPOSIT_QR_ASSETS}
+        <WithdrawModal
+          open={withdrawOpen}
+          onClose={() => setWithdrawOpen(false)}
+          account={address}
+          balance={flexibleBalance}
+          onWithdrawn={refetch}
         />
       )}
     </div>
