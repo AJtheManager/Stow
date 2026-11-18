@@ -73,6 +73,18 @@ impl SavingsVault {
         admin::set_paused(&env, caller, paused)
     }
 
+    /// Pause the vault. Admin-only. Blocks deposits and withdrawals until
+    /// `unpause` is called; emergency withdrawals remain available. Emits a
+    /// `paused` event.
+    pub fn pause(env: Env, caller: Address) -> Result<(), Error> {
+        admin::pause(&env, caller)
+    }
+
+    /// Unpause the vault. Admin-only. Emits an `unpaused` event.
+    pub fn unpause(env: Env, caller: Address) -> Result<(), Error> {
+        admin::unpause(&env, caller)
+    }
+
     pub fn is_paused(env: Env) -> bool {
         admin::is_paused(&env)
     }

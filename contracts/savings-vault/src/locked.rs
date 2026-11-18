@@ -19,6 +19,7 @@ use crate::types::{DataKey, LockedPlan};
 /// - Returns the new plan id.
 pub fn create(env: &Env, owner: Address, amount: i128, unlock_at: u64) -> Result<u64, Error> {
     extend_instance_ttl(env);
+    admin::require_not_paused(env)?;
     owner.require_auth();
 
     if amount <= 0 {
@@ -57,6 +58,7 @@ pub fn create(env: &Env, owner: Address, amount: i128, unlock_at: u64) -> Result
 /// - Errors `Unauthorized` if `owner` does not own `plan_id`.
 pub fn top_up(env: &Env, owner: Address, plan_id: u64, amount: i128) -> Result<(), Error> {
     extend_instance_ttl(env);
+    admin::require_not_paused(env)?;
     owner.require_auth();
 
     if amount <= 0 {
@@ -108,6 +110,7 @@ pub fn top_up(env: &Env, owner: Address, plan_id: u64, amount: i128) -> Result<(
 /// locked (solo) plans.
 pub fn withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> Result<(), Error> {
     extend_instance_ttl(env);
+    admin::require_not_paused(env)?;
     owner.require_auth();
 
     if amount <= 0 {
@@ -192,6 +195,7 @@ pub fn get_plan(env: &Env, plan_id: u64) -> Result<LockedPlan, Error> {
 /// `OperationExpired`.
 pub fn early_withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> Result<(), Error> {
     extend_instance_ttl(env);
+    admin::require_not_paused(env)?;
     owner.require_auth();
 
     if amount <= 0 {
@@ -255,7 +259,9 @@ pub fn early_withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> 
 }
 
 /// Emergency withdrawal from a locked plan. Only available when the contract
-/// is in emergency mode. Bypasses the timelock and incurs no penalty.
+/// is in emergency mode. Bypasses the timelock and incurs no penalty, and is
+/// deliberately not guarded by `require_not_paused` so funds remain
+/// reachable even while the vault is paused.
 pub fn emergency_withdraw(
     env: &Env,
     owner: Address,

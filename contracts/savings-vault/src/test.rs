@@ -12,7 +12,7 @@ use soroban_sdk::{
     contract, contractclient, contractimpl,
     testutils::{Address as _, Events as _, Ledger, LedgerInfo},
     token::StellarAssetClient,
-    contract, contractimpl, Address, BytesN, Env, IntoVal, Map, String,
+    Address, BytesN, Env, IntoVal, Map, String,
 };
 
 use crate::error::Error;
@@ -3131,6 +3131,162 @@ fn set_paused_by_non_admin_rejected() {
     assert!(
         !client.is_paused(),
         "vault must remain unpaused after a rejected pause attempt"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Pause mechanism for emergencies
+//
+// `pause`/`unpause` are admin-only wrappers around `set_paused` that emit
+// dedicated `paused`/`unpaused` events. Deposits and withdrawals across the
+// flexible and locked modules are rejected with `Error::Paused` while the
+// vault is paused; `locked_emergency_withdraw` is deliberately exempt so
+// funds stay reachable during an incident.
+// ---------------------------------------------------------------------------
+
+/// Only the admin may call `pause`/`unpause`; a non-admin caller is rejected
+/// and the paused flag is left unchanged.
+#[test]
+fn pause_and_unpause_only_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _token) = setup_with_token(&env);
+    let attacker = Address::generate(&env);
+
+    let result = client.try_pause(&attacker);
+    assert_eq!(
+        result,
+        Err(Ok(Error::Unauthorized)),
+        "non-admin must not be able to pause the vault",
+    );
+    assert!(!client.is_paused());
+
+    client.pause(&admin);
+    assert!(client.is_paused());
+
+    let result = client.try_unpause(&attacker);
+    assert_eq!(
+        result,
+        Err(Ok(Error::Unauthorized)),
+        "non-admin must not be able to unpause the vault",
+    );
+    assert!(client.is_paused());
+
+    client.unpause(&admin);
+    assert!(!client.is_paused());
+}
+
+/// `pause` and `unpause` emit `paused`/`unpaused` events carrying the caller
+/// and timestamp.
+#[test]
+fn pause_and_unpause_emit_events() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _token) = setup_with_token(&env);
+
+    client.pause(&admin);
+    let paused_at = env.ledger().timestamp();
+
+    let events = env.events().all();
+    let (contract_id, topics, data) = events.get(events.len() - 1).unwrap();
+    assert_eq!(contract_id, client.address);
+    let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> =
+        (crate::events::TOPIC_PAUSED,).into_val(&env);
+    assert_eq!(topics, expected_topics, "pause must emit a `paused` event");
+    let decoded: (Address, u64) = soroban_sdk::TryFromVal::try_from_val(&env, &data).unwrap();
+    assert_eq!(decoded, (admin.clone(), paused_at));
+
+    client.unpause(&admin);
+    let unpaused_at = env.ledger().timestamp();
+
+    let events = env.events().all();
+    let (contract_id, topics, data) = events.get(events.len() - 1).unwrap();
+    assert_eq!(contract_id, client.address);
+    let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> =
+        (crate::events::TOPIC_UNPAUSED,).into_val(&env);
+    assert_eq!(
+        topics, expected_topics,
+        "unpause must emit an `unpaused` event"
+    );
+    let decoded: (Address, u64) = soroban_sdk::TryFromVal::try_from_val(&env, &data).unwrap();
+    assert_eq!(decoded, (admin, unpaused_at));
+}
+
+/// Deposits are rejected with `Error::Paused` while the vault is paused.
+#[test]
+fn deposit_fails_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, token) = setup_with_token(&env);
+    let token_admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    mint(&env, &token, &token_admin, &owner, 10_000_000);
+
+    client.pause(&admin);
+
+    let result = client.try_deposit(&owner, &1_000_000);
+    assert_eq!(
+        result,
+        Err(Ok(Error::Paused)),
+        "deposit must fail while paused",
+    );
+}
+
+/// Withdrawals are rejected with `Error::Paused` while the vault is paused,
+/// and succeed again once the admin unpauses.
+#[test]
+fn withdraw_fails_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, token) = setup_with_token(&env);
+    let token_admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    mint(&env, &token, &token_admin, &owner, 10_000_000);
+    client.deposit(&owner, &5_000_000);
+
+    client.pause(&admin);
+
+    let result = client.try_withdraw(&owner, &1_000_000);
+    assert_eq!(
+        result,
+        Err(Ok(Error::Paused)),
+        "withdraw must fail while paused",
+    );
+
+    client.unpause(&admin);
+    client.withdraw(&owner, &1_000_000);
+    assert_eq!(client.get_account(&owner).balance, 4_000_000);
+}
+
+/// A locked plan's emergency withdrawal still succeeds while the vault is
+/// paused (as long as emergency mode is also active) — the pause guard is
+/// deliberately not applied to `locked_emergency_withdraw`.
+#[test]
+fn emergency_withdraw_works_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, token) = setup_with_token(&env);
+    let token_admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    mint(&env, &token, &token_admin, &owner, 10_000_000);
+
+    let now = env.ledger().timestamp();
+    let plan_id = client.locked_create(&owner, &5_000_000, &(now + 1_000));
+
+    client.pause(&admin);
+    client.set_emergency_mode(&admin, &true);
+
+    client.locked_emergency_withdraw(&owner, &plan_id);
+
+    let plan = client.locked_plan(&plan_id);
+    assert_eq!(
+        plan.balance, 0,
+        "emergency withdrawal must drain the plan even while the vault is paused",
     );
 }
 

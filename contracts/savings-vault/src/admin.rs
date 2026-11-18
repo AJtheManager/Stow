@@ -4,8 +4,8 @@ use soroban_sdk::{Address, BytesN, Env};
 
 use crate::error::Error;
 use crate::events::{
-    EVENT_SCHEMA_VERSION, TOPIC_ADMIN_SET, TOPIC_EMERGENCY_MODE_SET, TOPIC_INIT,
-    TOPIC_UPGRADE_CANCELLED, TOPIC_UPGRADE_PROPOSED, TOPIC_UPGRADED,
+    EVENT_SCHEMA_VERSION, TOPIC_ADMIN_SET, TOPIC_EMERGENCY_MODE_SET, TOPIC_INIT, TOPIC_PAUSED,
+    TOPIC_UNPAUSED, TOPIC_UPGRADE_CANCELLED, TOPIC_UPGRADE_PROPOSED, TOPIC_UPGRADED,
 };
 use crate::storage::{self, extend_instance_ttl};
 use crate::types::{DataKey, UpgradeProposal};
@@ -73,7 +73,9 @@ pub fn set_admin(env: &Env, new_admin: Address) -> Result<(), Error> {
 /// Set the emergency-pause flag. Admin-only.
 ///
 /// While paused, mutating entrypoints reject with `Error::Paused`; reads
-/// remain available.
+/// remain available. Emergency withdrawals (see `locked::emergency_withdraw`)
+/// are exempt from the pause guard so funds stay accessible during an
+/// incident. Emits a `paused` or `unpaused` event depending on the new value.
 pub fn set_paused(env: &Env, caller: Address, paused: bool) -> Result<(), Error> {
     extend_instance_ttl(env);
 
@@ -85,7 +87,21 @@ pub fn set_paused(env: &Env, caller: Address, paused: bool) -> Result<(), Error>
 
     env.storage().instance().set(&DataKey::Paused, &paused);
 
+    let topic = if paused { TOPIC_PAUSED } else { TOPIC_UNPAUSED };
+    env.events()
+        .publish((topic,), (caller, env.ledger().timestamp()));
+
     Ok(())
+}
+
+/// Pause the vault. Admin-only. Equivalent to `set_paused(caller, true)`.
+pub fn pause(env: &Env, caller: Address) -> Result<(), Error> {
+    set_paused(env, caller, true)
+}
+
+/// Unpause the vault. Admin-only. Equivalent to `set_paused(caller, false)`.
+pub fn unpause(env: &Env, caller: Address) -> Result<(), Error> {
+    set_paused(env, caller, false)
 }
 
 /// Whether the contract is currently paused. Defaults to `false` if unset.

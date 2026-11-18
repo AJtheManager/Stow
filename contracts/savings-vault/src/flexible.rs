@@ -97,6 +97,7 @@ pub fn deposit(env: &Env, from: Address, amount: i128) -> Result<(), Error> {
 /// No exception to this exists for flexible (solo) accounts.
 pub fn withdraw(env: &Env, owner: Address, amount: i128) -> Result<(), Error> {
     extend_instance_ttl(env);
+    admin::require_not_paused(env)?;
     owner.require_auth();
 
     if amount <= 0 {
