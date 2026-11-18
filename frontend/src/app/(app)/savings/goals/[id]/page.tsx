@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { Target } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useSession } from "@/context/SessionProvider";
 import { useGoalClaim } from "@/hooks/useGoalClaim";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 import { formatStroopsAmount } from "@/lib/currency";
 import GoalMilestoneCelebration from "@/components/savings/GoalMilestoneCelebration";
+import { AccountNicknameEditor } from "@/components/savings/NicknameEditor";
 
 interface Goal {
   on_chain_id: string;
@@ -29,6 +31,7 @@ export default function GoalDetailPage({
   const [error, setError] = useState<Error | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const { address } = useSession();
   const { status: claimStatus, error: claimError, claimGoal } = useGoalClaim();
 
   useEffect(() => {
@@ -152,6 +155,15 @@ export default function GoalDetailPage({
             <Target className="h-7 w-7 sm:h-8 sm:w-8 text-brand shrink-0" />
             <h1 className="text-2xl sm:text-3xl font-semibold text-foreground break-words">{goal.name}</h1>
           </div>
+          {address && (
+            <div className="mb-3">
+              <AccountNicknameEditor
+                kind="goal"
+                id={goal.on_chain_id}
+                owner={address}
+              />
+            </div>
+          )}
           <span
             className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${goal.status === "claimed"
               ? "bg-muted/20 text-muted"

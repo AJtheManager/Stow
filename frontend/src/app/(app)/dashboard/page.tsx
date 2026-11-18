@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useSession } from "@/context/SessionProvider";
 import { useSavingsSummary } from "@/hooks/useSavingsSummary";
+import { useSavingsAccounts } from "@/hooks/useSavingsAccount";
+import AccountList from "@/components/savings/AccountList";
 import SummaryCards from "@/components/savings/SummaryCards";
 import PortfolioAllocationChart from "@/components/savings/PortfolioAllocationChart";
 import DepositModal from "@/components/savings/DepositModal";
@@ -37,6 +39,7 @@ export default function DashboardPage() {
   const { summary, status, error, refetch } = useSavingsSummary(address);
   // Declared after `useSavingsSummary` so the summary request is issued first.
   const { deposits, status: depositsStatus } = useDepositHistory(address);
+  const { accounts, status: accountsStatus } = useSavingsAccounts(address);
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
@@ -61,6 +64,15 @@ export default function DashboardPage() {
           <>
             <SummaryCards summary={summary} isLoading={isLoading} />
             <PortfolioAllocationChart summary={summary} isLoading={isLoading} />
+
+            {address && accountsStatus !== "error" && (
+              <div className="mt-8">
+                <AccountList
+                  accounts={accounts}
+                  isLoading={accountsStatus === "loading"}
+                />
+              </div>
+            )}
 
             <div className="mt-8">
               <h2 className="mb-3 text-sm font-medium text-muted">
