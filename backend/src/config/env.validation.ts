@@ -210,6 +210,11 @@ class EnvironmentVariables {
   @IsString()
   FRONTEND_URL?: string;
 
+  /** Public base URL of this API, used for the unsubscribe link in emails. */
+  @IsOptional()
+  @IsString()
+  API_PUBLIC_URL?: string;
+
   /** Comma-separated browser origins allowed to call the API. */
   @IsOptional()
   @IsString()

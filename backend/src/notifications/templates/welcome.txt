@@ -1,0 +1,10 @@
+Welcome to Stow, {{userName}}
+
+Your account is ready. Stow lets you save in USDC on Stellar, with flexible, locked, goal-based and group savings that you control.
+
+A good first step:
+- Make a first deposit to start saving.
+- Set a goal so you can watch your progress.
+- Try the savings calculator to see how your savings could grow.
+
+Start saving: {{appUrl}}

@@ -7,6 +7,8 @@ import { NotificationCategoryPreference } from './entities/notification-category
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { EmailService } from './email.service';
+import { EmailTemplateService } from './email-template.service';
+import { EmailUnsubscribeController } from './email-unsubscribe.controller';
 import { NotificationGeneratorService } from './notification-generator.service';
 import { DigestService } from './digest.service';
 import { UsersModule } from '../users/users.module';
@@ -25,13 +27,19 @@ import { UserPreferences } from '../users/entities/user-preferences.entity';
     ]),
     UsersModule,
   ],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, EmailUnsubscribeController],
   providers: [
     NotificationsService,
     EmailService,
+    EmailTemplateService,
     NotificationGeneratorService,
     DigestService,
   ],
-  exports: [NotificationsService, EmailService, NotificationGeneratorService],
+  exports: [
+    NotificationsService,
+    EmailService,
+    EmailTemplateService,
+    NotificationGeneratorService,
+  ],
 })
 export class NotificationsModule {}

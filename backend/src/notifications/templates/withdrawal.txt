@@ -1,0 +1,12 @@
+Withdrawal confirmed
+
+Hi {{userName}}, your withdrawal has been processed.
+
+Amount: {{amount}} {{asset}}
+Date: {{date}}
+Sent to: {{destination}}
+Transaction: {{transactionId}}
+
+If you did not make this withdrawal, contact support right away.
+
+View your savings: {{appUrl}}

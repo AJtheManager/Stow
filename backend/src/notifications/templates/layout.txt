@@ -1,0 +1,6 @@
+{{{content}}}
+
+--
+You are receiving this email because you have a Stow account and email notifications are turned on.
+Unsubscribe: {{unsubscribeUrl}}
+Stow is non-custodial. We never hold your funds.
