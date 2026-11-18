@@ -823,6 +823,26 @@ Topics: `(Symbol("upgraded"),)`
 | `new_wasm_hash` | `BytesN<32>` | Hash of the newly-installed Wasm. |
 | `timestamp` | `u64` | Ledger timestamp of the call. |
 
+#### `paused`
+Topics: `(Symbol("paused"),)`
+
+Emitted by `pause` and by `set_paused(true)`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `caller` | `Address` | Admin who paused the vault. |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
+#### `unpaused`
+Topics: `(Symbol("unpaused"),)`
+
+Emitted by `unpause` and by `set_paused(false)`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `caller` | `Address` | Admin who unpaused the vault. |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
 #### `deposit`
 Topics: `(Symbol("deposit"), owner: Address)`
 

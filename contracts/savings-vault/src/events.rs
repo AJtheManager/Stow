@@ -24,6 +24,12 @@ pub const TOPIC_ADMIN_SET: &str = "admin_set";
 /// Emitted at the end of a successful `upgrade` call.
 pub const TOPIC_UPGRADED: &str = "upgraded";
 
+// --- pause mechanism -------------------------------------------------------
+/// Emitted when the vault is paused (via `pause` or `set_paused(true)`).
+pub const TOPIC_PAUSED: &str = "paused";
+/// Emitted when the vault is unpaused (via `unpause` or `set_paused(false)`).
+pub const TOPIC_UNPAUSED: &str = "unpaused";
+
 // --- flexible ------------------------------------------------------------
 /// Emitted at the end of a successful `deposit` call.
 pub const TOPIC_DEPOSIT: &str = "deposit";

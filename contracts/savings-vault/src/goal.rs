@@ -2,6 +2,7 @@
 
 use soroban_sdk::{Address, Env, Map, String};
 
+use crate::admin::require_not_paused;
 use crate::error::Error;
 use crate::events::{
     TOPIC_GOAL_AUTO_RENEW_SET, TOPIC_GOAL_CLAIMED, TOPIC_GOAL_CONTRIBUTION, TOPIC_GOAL_CREATED,
@@ -56,6 +57,7 @@ pub fn compute_payouts(
 /// - Returns the new goal id.
 pub fn create(env: &Env, owner: Address, name: String, target_amount: i128) -> Result<u64, Error> {
     extend_instance_ttl(env);
+    require_not_paused(env)?;
     owner.require_auth();
 
     if target_amount <= 0 {
@@ -90,6 +92,7 @@ pub fn create(env: &Env, owner: Address, name: String, target_amount: i128) -> R
 /// reaches `target_amount`, set `reached_at` and emit a `goal_reached` event.
 pub fn contribute(env: &Env, from: Address, goal_id: u64, amount: i128) -> Result<(), Error> {
     extend_instance_ttl(env);
+    require_not_paused(env)?;
     from.require_auth();
 
     if amount <= 0 {
@@ -172,6 +175,7 @@ pub fn contribute(env: &Env, from: Address, goal_id: u64, amount: i128) -> Resul
 /// if a contribution was made in the current ledger.
 pub fn claim(env: &Env, owner: Address, goal_id: u64) -> Result<(), Error> {
     extend_instance_ttl(env);
+    require_not_paused(env)?;
     owner.require_auth();
 
     let key = DataKey::Goal(goal_id);
@@ -257,6 +261,7 @@ pub fn set_auto_renew(
     auto_renew: bool,
 ) -> Result<(), Error> {
     extend_instance_ttl(env);
+    require_not_paused(env)?;
     owner.require_auth();
 
     let key = DataKey::Goal(goal_id);

@@ -77,6 +77,11 @@ pub enum Error {
     // --- Admin Lifecycle (70-79) ---
     /// The contract is paused; mutating entrypoints are rejected.
     Paused = 70,
+    /// The contract is in emergency mode; only withdrawals are permitted.
+    EmergencyShutdown = 71,
+    /// The contract is not in emergency mode; emergency-only operations are
+    /// unavailable.
+    NotPaused = 72,
 
     // --- Policy Limits (80-89) ---
     /// The deposit amount was below the admin-configured minimum deposit.
