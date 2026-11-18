@@ -35,6 +35,7 @@ import { CsvImportModule } from './csv-import/csv-import.module';
 import { GraphqlApiModule } from './graphql/graphql.module';
 import { CacheModule } from './cache/cache.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { FeesModule } from './fees/fees.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { MetricsModule } from './metrics/metrics.module';
 
     CacheModule,
     MetricsModule,
+    FeesModule,
     HealthModule,
     AuthModule,
     UsersModule,
