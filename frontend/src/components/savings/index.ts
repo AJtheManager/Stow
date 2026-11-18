@@ -1,3 +1,5 @@
+export { default as ExportButton } from "./ExportButton";
+export type { ExportButtonProps } from "./ExportButton";
 export { default as BalanceSparkline } from "./BalanceSparkline";
 export type {
   BalanceDataPoint,
