@@ -24,6 +24,7 @@ import { ContractModule } from './contract/contract.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AccountModule } from './account/account.module';
 import { SavingsModule } from './savings/savings.module';
+import { AuditModule } from './audit/audit.module';
 import { ActivityModule } from './activity/activity.module';
 import { NftRewardsModule } from './nft-rewards/nft-rewards.module';
 import { InterestRatesModule } from './interest-rates/interest-rates.module';
@@ -115,6 +116,7 @@ import { MetricsModule } from './metrics/metrics.module';
     AccountModule,
     SavingsModule,
     ActivityModule,
+    AuditModule,
     BackupModule,
     AnchorModule,
     CsvImportModule,
