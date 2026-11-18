@@ -121,6 +121,18 @@ pub struct Group {
     pub voting_period: u64,
 }
 
+/// Per-member contribution limits for a group pool, set at creation.
+///
+/// A value of `0` disables that limit.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GroupLimits {
+    /// Smallest amount accepted for a single contribution.
+    pub min_contribution: i128,
+    /// Largest cumulative amount a single member may contribute.
+    pub max_contribution: i128,
+}
+
 /// A member proposal to spend part of a group's pool.
 ///
 /// Any member opens one via `group_propose`; members cast one vote each with
@@ -402,5 +414,18 @@ pub enum DataKey {
     InsuranceMaxClaimBps,
     /// Approved insurance claim by user address.
     InsuranceClaim(Address),
+
+    // --- Group contribution limits (#579) ---
+    /// `GroupLimits` for a group id. Absent means no limits.
+    ///
+    /// Durability: persistent — one entry per group. TTL: bumped on every
+    /// read/write via `extend_persistent_ttl`.
+    GroupLimits(u64),
+    /// Cumulative amount a member has contributed to a group, keyed by
+    /// `(group_id, member)`.
+    ///
+    /// Durability: persistent — kept out of the `Group` record so
+    /// contributing does not grow it. TTL: bumped on every read/write.
+    GroupContribution(u64, Address),
 }
 

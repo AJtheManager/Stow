@@ -59,6 +59,10 @@ pub enum Error {
     InvalidShares = 51,
     /// Caller is not a member of this group.
     NotAMember = 52,
+    /// A contribution was below the group's per-contribution minimum.
+    GroupContributionBelowMinimum = 53,
+    /// A contribution would push the member above the group's per-member maximum.
+    GroupContributionAboveMaximum = 54,
     /// Group has insufficient funds for payout.
     InsufficientGroupFunds = 55,
     /// Member already exists in group.

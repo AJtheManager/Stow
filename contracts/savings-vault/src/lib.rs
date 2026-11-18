@@ -26,6 +26,7 @@ mod group;
 mod group_split;
 mod insurance;
 mod interest;
+mod limits;
 mod challenge;
 mod locked;
 pub mod rewards;
@@ -37,11 +38,16 @@ mod voting;
 #[cfg(test)]
 mod test;
 
+// Standalone so it builds and runs independently of the large `test` module.
+#[cfg(test)]
+#[path = "test/limits_test.rs"]
+mod limits_test;
+
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String};
 
 use crate::error::Error;
 use crate::types::{
-    CompoundFrequency, FlexibleAccount, Goal, Group, InsuranceClaimRecord, InterestAccount,
+    CompoundFrequency, FlexibleAccount, Goal, Group, GroupLimits, InsuranceClaimRecord, InterestAccount,
     LockedPlan, Proposal, UpgradeProposal,
 };
 
@@ -250,6 +256,34 @@ impl SavingsVault {
     // --- group -------------------------------------------------------------
     pub fn group_create(env: Env, creator: Address, name: String) -> Result<u64, Error> {
         group::create(&env, creator, name)
+    }
+
+    /// Create a group with per-member contribution limits (`0` = no limit).
+    ///
+    /// `min_contribution` applies to each deposit; `max_contribution` caps a
+    /// member's cumulative total in the pool.
+    pub fn group_create_with_limits(
+        env: Env,
+        creator: Address,
+        name: String,
+        min_contribution: i128,
+        max_contribution: i128,
+    ) -> Result<u64, Error> {
+        group::create_with_limits(&env, creator, name, min_contribution, max_contribution)
+    }
+
+    /// Contribution limits configured for a group. Both zero when unlimited.
+    pub fn group_limits(env: Env, group_id: u64) -> Result<GroupLimits, Error> {
+        group::get_limits(&env, group_id)
+    }
+
+    /// Total a member has contributed to a group so far.
+    pub fn group_member_contribution(
+        env: Env,
+        group_id: u64,
+        member: Address,
+    ) -> Result<i128, Error> {
+        group::get_member_contribution(&env, group_id, member)
     }
 
     pub fn group_join(env: Env, member: Address, group_id: u64) -> Result<(), Error> {
