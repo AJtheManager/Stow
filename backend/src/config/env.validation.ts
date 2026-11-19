@@ -210,6 +210,25 @@ class EnvironmentVariables {
   @IsString()
   FRONTEND_URL?: string;
 
+  /**
+   * 32-byte key (64 hex characters or base64) that encrypts audit logs. The
+   * app refuses to start without it; it is optional here only so the error
+   * comes from the audit module with a clear message.
+   */
+  @IsOptional()
+  @IsString()
+  AUDIT_LOG_ENCRYPTION_KEY?: string;
+
+  /** Days to keep audit logs before they are purged. Defaults to 365. */
+  @IsOptional()
+  @IsString()
+  AUDIT_LOG_RETENTION_DAYS?: string;
+
+  /** Public base URL of this API, used for the unsubscribe link in emails. */
+  @IsOptional()
+  @IsString()
+  API_PUBLIC_URL?: string;
+
   /** Comma-separated browser origins allowed to call the API. */
   @IsOptional()
   @IsString()

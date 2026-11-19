@@ -1,0 +1,8 @@
+Goal achieved
+
+Congratulations, {{userName}}. You reached your savings goal "{{goalName}}".
+
+Target: {{targetAmount}} {{asset}}
+Reached on: {{date}}
+
+See your goal: {{appUrl}}

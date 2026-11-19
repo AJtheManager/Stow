@@ -26,6 +26,8 @@ export interface QueuedEmail {
   html: string;
   text: string;
   userAddress?: string;
+  /** Sender display name. Defaults to the legacy "InsightArena" name. */
+  fromName?: string;
   queuedAt: number;
 }
 
@@ -206,6 +208,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     html: string;
     text: string;
     userAddress?: string;
+    fromName?: string;
   }): Promise<{ queued: boolean; reason?: string }> {
     if (!params.to?.trim()) {
       return { queued: false, reason: 'Recipient email is required' };
@@ -228,6 +231,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
       html: params.html,
       text: params.text,
       userAddress: params.userAddress,
+      fromName: params.fromName,
       queuedAt: Date.now(),
     });
 
@@ -397,7 +401,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
         },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: email.to }] }],
-          from: { email: fromEmail, name: 'InsightArena' },
+          from: { email: fromEmail, name: email.fromName ?? 'InsightArena' },
           subject: email.subject,
           content: [
             { type: 'text/plain', value: email.text },

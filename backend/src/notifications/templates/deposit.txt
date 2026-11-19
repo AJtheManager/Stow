@@ -1,0 +1,9 @@
+Deposit confirmed
+
+Hi {{userName}}, your deposit has been confirmed and is now part of your savings.
+
+Amount: {{amount}} {{asset}}
+Date: {{date}}
+Transaction: {{transactionId}}
+
+View your savings: {{appUrl}}
