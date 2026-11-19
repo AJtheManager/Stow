@@ -258,4 +258,390 @@ describe('ActivityService', () => {
       );
     });
   });
+
+  describe('Activity filtering', () => {
+    it('filters by activity type', async () => {
+      events = [
+        event({ event_type: 'deposit', data: { amount: '100' } }),
+        event({ event_type: 'withdraw', data: { amount: '50' } }),
+      ];
+
+      const items = await service.list(query({ types: ['deposit'] }));
+
+      expect(items).toHaveLength(1);
+      expect(items[0].type).toBe('deposit');
+    });
+
+    it('returns all activity types when no types specified', async () => {
+      events = [
+        event({ event_type: 'deposit', data: { amount: '100' } }),
+        event({ event_type: 'withdraw', data: { amount: '50' } }),
+        event({ event_type: 'goal_created', data: { target_amount: '1000' } }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items).toHaveLength(3);
+    });
+
+    it('matches goal events by goal id', async () => {
+      events = [
+        event({
+          event_type: 'goal_contribution',
+          data: { id: '7', amount: '100' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0].goal_name).toBe('Holiday');
+      expect(items[0].goal_id).toBe('7');
+    });
+
+    it('matches deposit/withdrawal events by owner address', async () => {
+      events = [
+        event({
+          event_type: 'deposit',
+          data: { owner: ADDRESS, amount: '100' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items).toHaveLength(1);
+      expect(items[0].type).toBe('deposit');
+    });
+
+    it('handles null or missing amounts gracefully', async () => {
+      events = [
+        event({ event_type: 'goal_reached', data: { id: '7' } }),
+        event({ event_type: 'deposit', data: { amount: null } }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0].amount).toBeNull();
+      expect(items[1].amount).toBeNull();
+    });
+
+    it('respects date range filter', async () => {
+      await service.list(
+        query({
+          from: '2026-11-05T00:00:00.000Z',
+          to: '2026-11-15T23:59:59.999Z',
+        }),
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('event.created_at >= :from', {
+        from: new Date('2026-11-05T00:00:00.000Z'),
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('event.created_at <= :to', {
+        to: new Date('2026-11-15T23:59:59.999Z'),
+      });
+    });
+
+    it('orders by created_at descending, then ledger', async () => {
+      await service.list(query());
+
+      expect(qb.orderBy).toHaveBeenCalledWith('event.created_at', 'DESC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('event.ledger', 'DESC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('event.log_index', 'DESC');
+    });
+
+    it('respects custom limit parameter', async () => {
+      await service.list(query(), 50);
+
+      expect(qb.take).toHaveBeenCalledWith(50);
+    });
+
+    it('uses default limit when not specified', async () => {
+      await service.list(query());
+
+      expect(qb.take).toHaveBeenCalled();
+    });
+  });
+
+  describe('CSV export', () => {
+    it('includes metadata header with export timestamp', async () => {
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+      const lines = csv.split('\r\n');
+
+      expect(lines[0]).toContain('Account address');
+      expect(lines[0]).toContain(ADDRESS);
+      expect(lines[1]).toContain('Export date');
+      expect(lines[1]).toContain('2026-11-18');
+    });
+
+    it('properly escapes CSV fields with commas', async () => {
+      const injected = new ActivityService(
+        {
+          createQueryBuilder: jest.fn(() => qb),
+        } as unknown as Repository<ContractEvent>,
+        {
+          find: jest.fn(async () => [
+            { on_chain_id: '7', name: 'Goal, with comma' },
+          ]),
+        } as unknown as Repository<Goal>,
+      );
+      events = [event({ event_type: 'goal_reached', data: { id: '7' } })];
+
+      const csv = await injected.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('"Goal, with comma"');
+    });
+
+    it('properly escapes CSV fields with quotes', async () => {
+      const injected = new ActivityService(
+        {
+          createQueryBuilder: jest.fn(() => qb),
+        } as unknown as Repository<ContractEvent>,
+        {
+          find: jest.fn(async () => [
+            { on_chain_id: '7', name: 'Goal "special"' },
+          ]),
+        } as unknown as Repository<Goal>,
+      );
+      events = [event({ event_type: 'goal_reached', data: { id: '7' } })];
+
+      const csv = await injected.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('"Goal ""special"""');
+    });
+
+    it('handles large export with maximum rows', async () => {
+      events = Array.from({ length: MAX_EXPORT_ROWS }, (_, i) =>
+        event({
+          id: `evt-${i}`,
+          event_type: 'deposit',
+          data: { amount: '100', new_balance: String(100 * (i + 1)) },
+        }),
+      );
+
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+      const lines = csv.split('\r\n');
+
+      // Metadata (4 lines) + header (1 line) + blank (1 line) + data rows
+      expect(lines.length).toBeGreaterThan(MAX_EXPORT_ROWS + 5);
+    });
+
+    it('formats stroop amounts with 7 decimal places', async () => {
+      events = [
+        event({
+          event_type: 'deposit',
+          data: { amount: '10000000', new_balance: '10000000' },
+        }),
+      ];
+
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('10.0000000');
+    });
+
+    it('handles zero amounts correctly', async () => {
+      events = [
+        event({
+          event_type: 'deposit',
+          data: { amount: '0', new_balance: '0' },
+        }),
+      ];
+
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('0.0000000');
+    });
+  });
+
+  describe('Activity item mapping', () => {
+    it('correctly maps deposit event to activity item', async () => {
+      events = [
+        event({
+          id: 'dep-001',
+          event_type: 'deposit',
+          tx_hash: 'abc123',
+          ledger: 500,
+          created_at: new Date('2026-11-15T14:30:00.000Z'),
+          data: { owner: ADDRESS, amount: '1000000', new_balance: '1000000' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0]).toMatchObject({
+        id: 'dep-001',
+        type: 'deposit',
+        amount: '1000000',
+        balance: '1000000',
+        tx_hash: 'abc123',
+        ledger: 500,
+        goal_id: null,
+        goal_name: null,
+      });
+    });
+
+    it('correctly maps withdrawal event to activity item', async () => {
+      events = [
+        event({
+          id: 'with-001',
+          event_type: 'withdraw',
+          tx_hash: 'def456',
+          ledger: 510,
+          data: { owner: ADDRESS, amount: '500000', new_balance: '500000' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0]).toMatchObject({
+        type: 'withdrawal',
+        amount: '500000',
+        balance: '500000',
+      });
+    });
+
+    it('correctly maps goal contribution event', async () => {
+      events = [
+        event({
+          id: 'goal-contrib-001',
+          event_type: 'goal_contribution',
+          data: { id: '7', amount: '250000' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0]).toMatchObject({
+        type: 'goal_contribution',
+        amount: '250000',
+        goal_id: '7',
+        goal_name: 'Holiday',
+        balance: null,
+      });
+    });
+
+    it('correctly maps goal reached event', async () => {
+      events = [
+        event({
+          id: 'goal-reached-001',
+          event_type: 'goal_reached',
+          data: { id: '7' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0]).toMatchObject({
+        type: 'goal_reached',
+        amount: null,
+        goal_id: '7',
+        goal_name: 'Holiday',
+      });
+    });
+
+    it('handles alternative field names in contract events', async () => {
+      events = [
+        event({
+          event_type: 'deposit',
+          data: { user: ADDRESS, amount: '100', new_balance: '100' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items).toHaveLength(1);
+      expect(items[0].type).toBe('deposit');
+    });
+  });
+
+  describe('Error handling', () => {
+    it('throws BadRequestException when from > to', async () => {
+      const promise = service.list(
+        query({
+          from: '2026-11-20T00:00:00.000Z',
+          to: '2026-11-10T00:00:00.000Z',
+        }),
+      );
+
+      await expect(promise).rejects.toThrow(BadRequestException);
+    });
+
+    it('returns empty array when no events match', async () => {
+      events = [];
+
+      const items = await service.list(query());
+
+      expect(items).toEqual([]);
+    });
+
+    it('returns empty array when no goals found for user', async () => {
+      const noGoalsService = new ActivityService(
+        {
+          createQueryBuilder: jest.fn(() => qb),
+        } as unknown as Repository<ContractEvent>,
+        {
+          find: jest.fn(async () => []),
+        } as unknown as Repository<Goal>,
+      );
+      events = [
+        event({ event_type: 'goal_contribution', data: { id: '99' } }),
+      ];
+
+      const items = await noGoalsService.list(query());
+
+      expect(items).toHaveLength(0);
+    });
+
+    it('handles missing goal names gracefully', async () => {
+      events = [
+        event({
+          event_type: 'goal_contribution',
+          data: { id: '999', amount: '100' },
+        }),
+      ];
+
+      const items = await service.list(query());
+
+      expect(items[0].goal_name).toBeNull();
+    });
+  });
+
+  describe('Stroop formatting', () => {
+    it('correctly formats large stroop amounts', async () => {
+      events = [
+        event({
+          event_type: 'deposit',
+          data: { amount: '1000000000', new_balance: '1000000000' },
+        }),
+      ];
+
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('100.0000000');
+    });
+
+    it('correctly formats small stroop amounts', async () => {
+      events = [
+        event({
+          event_type: 'deposit',
+          data: { amount: '1', new_balance: '1' },
+        }),
+      ];
+
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('0.0000001');
+    });
+
+    it('handles negative amounts in CSV export', async () => {
+      events = [
+        event({
+          event_type: 'withdraw',
+          data: { amount: '-5000000', new_balance: '95000000' },
+        }),
+      ];
+
+      const csv = await service.exportCsv(query(), EXPORTED_AT);
+
+      expect(csv).toContain('-0.5000000');
+    });
+  });
 });
