@@ -1,4 +1,4 @@
-Closes #582
-Closes #580
-Closes #577
-Closes #578
+Closes #601
+Closes #598
+Closes #600
+Closes #599
