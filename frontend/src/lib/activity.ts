@@ -1,8 +1,6 @@
-import { apiFetch, ApiError } from "@/lib/api";
-
 /**
  * Account activity, as returned by `GET /api/savings/activity` and exported
- * as CSV by `GET /api/savings/activity/export`.
+ * as CSV by `GET /api/savings/activity/export` (see `lib/exportTransactions`).
  */
 export const ACTIVITY_TYPES = [
   "deposit",
@@ -32,6 +30,8 @@ export interface ActivityItem {
   tx_hash: string | null;
   ledger: number;
   occurred_at: string;
+  /** Flexible balance in stroops after a deposit/withdrawal, else null. */
+  balance: string | null;
 }
 
 export interface ActivityFilters {
@@ -70,34 +70,4 @@ export function unwrapApiData<T>(body: unknown): T {
     return (body as { data: T }).data;
   }
   return body as T;
-}
-
-/**
- * Downloads the address's transaction history as a CSV file, applying the
- * same date-range/type filters as the activity timeline.
- */
-export async function downloadActivityCsv(
-  address: string,
-  filters: ActivityFilters = {},
-): Promise<void> {
-  // The export is never truncated to the timeline's page size.
-  const query = buildActivityQuery(address, { ...filters, limit: undefined });
-  const response = await apiFetch(`/api/savings/activity/export?${query}`);
-
-  if (!response.ok) {
-    throw new ApiError(
-      `Failed to export transactions: ${response.statusText}`,
-      response.status,
-    );
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `stow-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }

@@ -44,6 +44,11 @@ export interface ActivityItem {
   tx_hash: string | null;
   ledger: number;
   occurred_at: string;
+  /**
+   * Flexible balance in stroops right after this event, for deposits and
+   * withdrawals (the contract reports it as `new_balance`); null otherwise.
+   */
+  balance: string | null;
 }
 
 const CSV_COLUMNS = [
@@ -51,6 +56,8 @@ const CSV_COLUMNS = [
   'type',
   'amount',
   'amount_stroops',
+  'balance',
+  'balance_stroops',
   'goal_id',
   'goal_name',
   'tx_hash',
@@ -129,13 +136,18 @@ export class ActivityService {
     return events.map((event) => this.toActivityItem(event, goalNames));
   }
 
-  async exportCsv(query: ActivityQueryDto): Promise<string> {
+  async exportCsv(
+    query: ActivityQueryDto,
+    exportedAt: Date = new Date(),
+  ): Promise<string> {
     const items = await this.list(query, MAX_EXPORT_ROWS);
     const rows = items.map((item) => [
-      item.occurred_at,
+      formatCsvDate(item.occurred_at),
       item.type,
       item.amount === null ? '' : formatStroops(item.amount),
       item.amount ?? '',
+      item.balance === null ? '' : formatStroops(item.balance),
+      item.balance ?? '',
       item.goal_id ?? '',
       item.goal_name ?? '',
       item.tx_hash ?? '',
@@ -143,7 +155,7 @@ export class ActivityService {
       item.id,
     ]);
 
-    return [CSV_COLUMNS, ...rows]
+    return [...buildCsvMetadata(query, exportedAt), [], CSV_COLUMNS, ...rows]
       .map((row) => row.map(escapeCsvField).join(','))
       .join('\r\n');
   }
@@ -159,6 +171,10 @@ export class ActivityService {
     const goalId = rawGoalId === undefined ? null : String(rawGoalId);
     const rawAmount =
       type === 'goal_created' ? data.target_amount : data.amount;
+    const rawBalance =
+      type === 'deposit' || type === 'withdrawal'
+        ? data.new_balance
+        : undefined;
 
     return {
       id: event.id,
@@ -176,8 +192,40 @@ export class ActivityService {
       tx_hash: event.tx_hash,
       ledger: Number(event.ledger),
       occurred_at: new Date(event.created_at).toISOString(),
+      balance:
+        typeof rawBalance === 'string' ||
+        typeof rawBalance === 'number' ||
+        typeof rawBalance === 'bigint'
+          ? String(rawBalance)
+          : null,
     };
   }
+}
+
+/** Formats an ISO timestamp as `YYYY-MM-DD HH:mm:ss UTC`. */
+export function formatCsvDate(iso: string | Date): string {
+  return new Date(iso)
+    .toISOString()
+    .replace('T', ' ')
+    .replace(/\.\d{3}Z$/, ' UTC');
+}
+
+/**
+ * Leading `label,value` rows that identify the account, when the export was
+ * generated and which filters were applied.
+ */
+function buildCsvMetadata(
+  query: ActivityQueryDto,
+  exportedAt: Date,
+): string[][] {
+  const metadata = [
+    ['Account address', query.address],
+    ['Export date', formatCsvDate(exportedAt)],
+  ];
+  if (query.from) metadata.push(['From', formatCsvDate(query.from)]);
+  if (query.to) metadata.push(['To', formatCsvDate(query.to)]);
+  if (query.types?.length) metadata.push(['Types', query.types.join(' ')]);
+  return metadata;
 }
 
 /** Formats a stroop integer string as a plain 7-decimal amount. */

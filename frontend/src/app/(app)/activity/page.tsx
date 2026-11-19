@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, Download, Loader2 } from "lucide-react";
+import { Activity, Loader2 } from "lucide-react";
 import { useSession } from "@/context/SessionProvider";
 import { useActivity } from "@/hooks/useActivity";
 import {
   ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
-  downloadActivityCsv,
   type ActivityType,
 } from "@/lib/activity";
 import ActivityTimeline from "@/components/activity/ActivityTimeline";
+import ExportButton from "@/components/savings/ExportButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 
@@ -24,8 +24,6 @@ export default function ActivityPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [types, setTypes] = useState<ActivityType[]>([]);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
 
   const rangeInvalid = Boolean(from && to && from > to);
   const filters = rangeInvalid
@@ -49,21 +47,6 @@ export default function ActivityPage() {
     setTypes([]);
   };
 
-  const handleExport = async () => {
-    if (!address) return;
-    setIsExporting(true);
-    setExportError(null);
-    try {
-      await downloadActivityCsv(address, filters);
-    } catch (err) {
-      setExportError(
-        err instanceof Error ? err.message : "Failed to export transactions",
-      );
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-3xl">
@@ -72,19 +55,11 @@ export default function ActivityPage() {
             <Activity className="h-8 w-8 text-brand" />
             <h1 className="text-3xl font-semibold text-foreground">Activity</h1>
           </div>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={!address || isExporting || rangeInvalid}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card/70 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Download className="h-4 w-4" aria-hidden="true" />
-            )}
-            Export CSV
-          </button>
+          <ExportButton
+            address={address}
+            filters={filters}
+            disabled={rangeInvalid}
+          />
         </div>
 
         <div className="mb-6 space-y-4 rounded-2xl border border-border bg-card p-4">
@@ -165,15 +140,6 @@ export default function ActivityPage() {
             </button>
           )}
         </div>
-
-        {exportError && (
-          <div
-            role="alert"
-            className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500"
-          >
-            {exportError}
-          </div>
-        )}
 
         {status === "error" ? (
           <ErrorRetry error={error} onRetry={refetch} />

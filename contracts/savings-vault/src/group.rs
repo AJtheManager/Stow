@@ -7,19 +7,44 @@ use crate::error::Error;
 use crate::events::{
     TOPIC_GROUP_CLOSED, TOPIC_GROUP_CONTRIBUTION, TOPIC_GROUP_CREATED, TOPIC_GROUP_PAYOUT,
 };
+use crate::limits;
 use crate::storage::{self, extend_instance_ttl};
-use crate::types::{DataKey, Group};
+use crate::types::{DataKey, Group, GroupLimits};
 
 /// Create a group pool. The creator is the first member.
 ///
 /// Returns the new group id. `open == true` until `close` is called.
 pub fn create(env: &Env, creator: Address, name: String) -> Result<u64, Error> {
+    create_with_limits(env, creator, name, 0, 0)
+}
+
+/// Create a group pool with per-member contribution limits (`0` = no limit).
+///
+/// `min_contribution` applies to each contribution; `max_contribution` caps a
+/// member's cumulative total. Errors `InvalidParameters` for negative limits
+/// or a minimum above a non-zero maximum.
+pub fn create_with_limits(
+    env: &Env,
+    creator: Address,
+    name: String,
+    min_contribution: i128,
+    max_contribution: i128,
+) -> Result<u64, Error> {
     extend_instance_ttl(env);
     require_not_paused(env)?;
     creator.require_auth();
 
+    // Reject invalid limits before allocating an id.
+    if min_contribution < 0
+        || max_contribution < 0
+        || (max_contribution > 0 && min_contribution > max_contribution)
+    {
+        return Err(Error::InvalidParameters);
+    }
+
     // Allocate a new group id
     let id = next_group_id(env);
+    limits::set(env, id, min_contribution, max_contribution)?;
 
     // Create members vector with creator as the sole member
     let mut members = Vec::new(env);
@@ -100,7 +125,9 @@ pub fn join(env: &Env, member: Address, group_id: u64) -> Result<(), Error> {
 
 /// Contribute `amount` into the shared pool.
 ///
-/// Errors `NotAMember` if the caller has not joined.
+/// Errors `NotAMember` if the caller has not joined,
+/// `GroupContributionBelowMinimum` / `GroupContributionAboveMaximum` if the
+/// group's limits are violated.
 pub fn contribute(env: &Env, member: Address, group_id: u64, amount: i128) -> Result<(), Error> {
     extend_instance_ttl(env);
     require_not_paused(env)?;
@@ -125,6 +152,9 @@ pub fn contribute(env: &Env, member: Address, group_id: u64, amount: i128) -> Re
     if !is_member {
         return Err(Error::NotAMember);
     }
+
+    // Enforce the group's contribution limits and record the member's total.
+    limits::check_and_record(env, group_id, &member, amount)?;
 
     // Transfer tokens from member into the vault
     storage::transfer_in(env, &member, amount)?;
@@ -260,6 +290,18 @@ pub fn get_group(env: &Env, group_id: u64) -> Result<Group, Error> {
         .ok_or(Error::NotFound)?;
     storage::extend_persistent_ttl(env, &key);
     Ok(group)
+}
+
+/// Limits configured for a group (both zero when unlimited).
+pub fn get_limits(env: &Env, group_id: u64) -> Result<GroupLimits, Error> {
+    get_group(env, group_id)?;
+    Ok(limits::get(env, group_id))
+}
+
+/// Total `member` has contributed to the group so far.
+pub fn get_member_contribution(env: &Env, group_id: u64, member: Address) -> Result<i128, Error> {
+    get_group(env, group_id)?;
+    Ok(limits::member_total(env, group_id, &member))
 }
 
 /// Helper to allocate the next group id.

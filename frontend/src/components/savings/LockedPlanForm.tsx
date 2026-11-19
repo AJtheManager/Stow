@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { validateTopUpAmount, type TopUpAmountError } from "@/hooks/useLockedTopUp";
+import { useNicknames } from "@/hooks/useSavingsAccount";
+import {
+  NICKNAME_ERROR_MESSAGES,
+  validateNickname,
+  type NicknameError,
+} from "@/lib/nicknames";
 import {
   parseUnlockDate,
   useCreateLockedPlan,
@@ -48,6 +54,9 @@ export default function LockedPlanForm({ owner, onCreated }: LockedPlanFormProps
   const [unlockDate, setUnlockDate] = useState("");
   const [amountError, setAmountError] = useState<TopUpAmountError | null>(null);
   const [dateError, setDateError] = useState<UnlockDateError | null>(null);
+  const [nickname, setNickname] = useState("");
+  const [nicknameError, setNicknameError] = useState<NicknameError | null>(null);
+  const { setNickname: saveNickname } = useNicknames(owner);
   const [showConfirm, setShowConfirm] = useState(false);
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const { status, error, isLoading, createLockedPlan, reset } =
@@ -57,9 +66,14 @@ export default function LockedPlanForm({ owner, onCreated }: LockedPlanFormProps
     e.preventDefault();
     const nextAmountError = validateTopUpAmount(amount);
     const nextDateError = validateUnlockDate(unlockDate);
+    // The nickname is optional; only validate it when something was typed.
+    const nicknameResult = nickname.trim() ? validateNickname(nickname) : null;
+    const nextNicknameError =
+      nicknameResult && !nicknameResult.ok ? nicknameResult.error : null;
     setAmountError(nextAmountError);
     setDateError(nextDateError);
-    if (nextAmountError || nextDateError) return;
+    setNicknameError(nextNicknameError);
+    if (nextAmountError || nextDateError || nextNicknameError) return;
 
     reset();
     setShowConfirm(true);
@@ -79,6 +93,7 @@ export default function LockedPlanForm({ owner, onCreated }: LockedPlanFormProps
 
     const plan = await createLockedPlan(owner, amount, unlockAt);
     if (plan) {
+      if (nickname.trim()) saveNickname("locked", plan.on_chain_id, nickname);
       setCreatedPlanId(plan.on_chain_id);
     }
     // On failure, keep the confirm step open so the error message stays
@@ -128,6 +143,14 @@ export default function LockedPlanForm({ owner, onCreated }: LockedPlanFormProps
           <p className="text-sm text-muted mb-3">
             Unlocks on: <span className="text-foreground">{formattedDate}</span>
           </p>
+          {nickname.trim() && (
+            <p className="text-sm text-muted mb-3">
+              Nickname:{" "}
+              <span className="text-foreground">
+                {nickname.trim().replace(/\s+/g, " ")}
+              </span>
+            </p>
+          )}
           <p className="text-sm text-muted">
             These funds can&apos;t be withdrawn before the unlock date.
           </p>
@@ -227,6 +250,37 @@ export default function LockedPlanForm({ owner, onCreated }: LockedPlanFormProps
               className="mt-2 text-sm text-red-400"
             >
               {UNLOCK_DATE_ERROR_MESSAGES[dateError]}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="locked-nickname"
+            className="block text-sm font-medium text-foreground mb-2"
+          >
+            Nickname (optional)
+          </label>
+          <input
+            id="locked-nickname"
+            type="text"
+            value={nickname}
+            onChange={(e) => {
+              setNickname(e.target.value);
+              setNicknameError(null);
+            }}
+            placeholder="e.g. Holiday fund 🌴"
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/50"
+            aria-invalid={nicknameError !== null}
+            aria-describedby={nicknameError ? "locked-nickname-error" : undefined}
+          />
+          {nicknameError && (
+            <p
+              id="locked-nickname-error"
+              role="alert"
+              className="mt-2 text-sm text-red-400"
+            >
+              {NICKNAME_ERROR_MESSAGES[nicknameError]}
             </p>
           )}
         </div>

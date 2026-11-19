@@ -13,6 +13,7 @@ import {
   TOP_UP_AMOUNT_ERROR_MESSAGES,
 } from "@/hooks/useLockedTopUp";
 import { LockedPlanCountdown } from "@/components/savings/LockedPlanCountdown";
+import { AccountNicknameEditor } from "@/components/savings/NicknameEditor";
 import ErrorRetry from "@/components/ui/ErrorRetry";
 import { formatStroopsAmount } from "@/lib/currency";
 
@@ -177,6 +178,13 @@ export default function LockedPlanDetailPage({
           <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
             Locked plan
           </h1>
+        </div>
+        <div className="mb-3">
+          <AccountNicknameEditor
+            kind="locked"
+            id={plan.on_chain_id}
+            owner={plan.owner}
+          />
         </div>
         <p className="font-mono text-xs text-muted break-all mb-3">
           #{plan.on_chain_id}
