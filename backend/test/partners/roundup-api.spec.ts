@@ -13,7 +13,11 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, UnauthorizedException } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerException } from '@nestjs/throttler';
 import request from 'supertest';
@@ -79,7 +83,9 @@ const validDto = (): PartnerTransactionDto => ({
 // 12_340_000 % 10_000_000 = 2_340_000 → roundup = 10_000_000 - 2_340_000 = 7_660_000
 const EXPECTED_ROUNDUP = '7660000';
 
-const makeRecord = (overrides: Partial<PartnerTransaction> = {}): PartnerTransaction => ({
+const makeRecord = (
+  overrides: Partial<PartnerTransaction> = {},
+): PartnerTransaction => ({
   id: 'rec-uuid-001',
   partner_id: PARTNER_API_KEY_ID,
   partner_transaction_id: 'txn-unique-001',
@@ -110,7 +116,9 @@ describe('RoundupApiService', () => {
       WEBHOOK_TIMEOUT_MS: 5_000,
       ...configOverrides,
     };
-    const configService = { get: (k: string) => baseConfig[k] } as unknown as ConfigService;
+    const configService = {
+      get: (k: string) => baseConfig[k],
+    } as unknown as ConfigService;
 
     txRepo = {
       findOne: jest.fn(),
@@ -145,7 +153,8 @@ describe('RoundupApiService', () => {
     it.each([
       // [description, amount (stroops), expected roundup]
       ['$1.23 → round to $2 = $0.77', 12_300_000n, 7_700_000n],
-      ['$12.34 → round to $13 = $0.66', 123_400_000n, 6_600_000n],      ['$1.00 exact (already whole) → 0', 10_000_000n, 0n],
+      ['$12.34 → round to $13 = $0.66', 123_400_000n, 6_600_000n],
+      ['$1.00 exact (already whole) → 0', 10_000_000n, 0n],
       ['$10.00 exact → 0', 100_000_000n, 0n],
       ['$0.01 → round to $1 = $0.99', 100_000n, 9_900_000n],
       ['$0.001 → round to $1 = $0.999', 10_000n, 9_990_000n],
@@ -248,7 +257,9 @@ describe('RoundupApiService', () => {
     });
 
     it('fires HMAC-signed POST to configured webhook URL', async () => {
-      buildService({ PARTNER_WEBHOOK_URL: 'https://partner.example.com/hooks' });
+      buildService({
+        PARTNER_WEBHOOK_URL: 'https://partner.example.com/hooks',
+      });
       txRepo.findOne.mockResolvedValue(null);
       const record = makeRecord();
       txRepo.create.mockReturnValue(record);
@@ -260,7 +271,8 @@ describe('RoundupApiService', () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
 
       expect(httpService.axiosRef.post).toHaveBeenCalledTimes(1);
-      const [url, payload, config] = (httpService.axiosRef.post as jest.Mock).mock.calls[0];
+      const [url, payload, config] = (httpService.axiosRef.post as jest.Mock)
+        .mock.calls[0];
       expect(url).toBe('https://partner.example.com/hooks');
       expect(payload.event).toBe('roundup.completed');
       expect(payload.data.roundup_amount).toBe(EXPECTED_ROUNDUP);
@@ -282,7 +294,8 @@ describe('RoundupApiService', () => {
       await service.processTransaction(makeApiKey(), validDto());
       await new Promise<void>((resolve) => setImmediate(resolve));
 
-      const [, payload, config] = (httpService.axiosRef.post as jest.Mock).mock.calls[0];
+      const [, payload, config] = (httpService.axiosRef.post as jest.Mock).mock
+        .calls[0];
       const payloadStr = JSON.stringify(payload);
       const expected = crypto
         .createHmac('sha256', secret)
@@ -292,7 +305,9 @@ describe('RoundupApiService', () => {
     });
 
     it('webhook failure does NOT undo a completed deposit', async () => {
-      buildService({ PARTNER_WEBHOOK_URL: 'https://partner.example.com/hooks' });
+      buildService({
+        PARTNER_WEBHOOK_URL: 'https://partner.example.com/hooks',
+      });
       txRepo.findOne.mockResolvedValue(null);
       const record = makeRecord();
       txRepo.create.mockReturnValue(record);
@@ -370,7 +385,6 @@ describe('PartnerTransactionDto validation', () => {
   });
 
   it('rejects a missing partner_transaction_id', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { partner_transaction_id: _, ...rest } = valid;
     const errors = await check(rest);
     expect(errors.length).toBeGreaterThan(0);
@@ -382,7 +396,6 @@ describe('PartnerTransactionDto validation', () => {
   });
 
   it('rejects a missing user_reference', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { user_reference: _, ...rest } = valid;
     const errors = await check(rest);
     expect(errors.length).toBeGreaterThan(0);
@@ -399,7 +412,10 @@ describe('PartnerTransactionDto validation', () => {
   });
 
   it('rejects a partner_transaction_id longer than 128 chars', async () => {
-    const errors = await check({ ...valid, partner_transaction_id: 'x'.repeat(129) });
+    const errors = await check({
+      ...valid,
+      partner_transaction_id: 'x'.repeat(129),
+    });
     expect(errors.length).toBeGreaterThan(0);
   });
 
@@ -431,9 +447,7 @@ describe('RoundupApiController – authentication', () => {
   const buildApp = async () => {
     validateKey = jest.fn();
     touchLastUsed = jest.fn();
-    processTransaction = jest
-      .fn()
-      .mockResolvedValue(makeRecord());
+    processTransaction = jest.fn().mockResolvedValue(makeRecord());
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [RoundupApiController],
@@ -477,9 +491,7 @@ describe('RoundupApiController – authentication', () => {
       .send(validDto());
 
   it('accepts a valid key with partner:roundup scope', async () => {
-    validateKey.mockResolvedValue(
-      makeApiKey({ scopes: ['partner:roundup'] }),
-    );
+    validateKey.mockResolvedValue(makeApiKey({ scopes: ['partner:roundup'] }));
     const res = await post({ 'x-api-key': PARTNER_API_KEY_RAW });
     expect(res.status).toBe(200);
   });
@@ -610,7 +622,10 @@ describe('Partner Roundup API – HTTP integration (happy path)', () => {
             },
           },
         },
-        { provide: ApiKeyService, useValue: { validateKey: validateKeyMock, touchLastUsed: jest.fn() } },
+        {
+          provide: ApiKeyService,
+          useValue: { validateKey: validateKeyMock, touchLastUsed: jest.fn() },
+        },
       ],
     })
       .overrideGuard(PartnerThrottlerGuard)

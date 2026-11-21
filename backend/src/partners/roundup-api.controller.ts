@@ -63,7 +63,7 @@ export class RoundupApiController {
     summary: 'Submit a transaction for round-up processing',
     description:
       'Calculates the round-up for the given transaction amount and deposits ' +
-      'it to the referenced user\'s savings account.  Idempotent: the same ' +
+      "it to the referenced user's savings account.  Idempotent: the same " +
       'partner_transaction_id returns the original result.',
   })
   @ApiResponse({
@@ -72,7 +72,10 @@ export class RoundupApiController {
   })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
-  @ApiResponse({ status: 403, description: 'API key lacks partner:roundup scope' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key lacks partner:roundup scope',
+  })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async submitTransaction(
     @Request() req: AuthenticatedRequest,

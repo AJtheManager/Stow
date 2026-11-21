@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -14,9 +10,7 @@ import {
   PartnerTransaction,
   PartnerTransactionStatus,
 } from './entities/partner-transaction.entity';
-import {
-  RoundupCalculatorService,
-} from '../savings-roundup/services/roundup-calculator.service';
+import { RoundupCalculatorService } from '../savings-roundup/services/roundup-calculator.service';
 import { RoundupMethod } from '../savings-roundup/entities/roundup-config.entity';
 import { BalanceService } from '../savings/balance.service';
 import { ApiKey } from '../auth/entities/api-key.entity';
@@ -94,9 +88,7 @@ export class RoundupApiService {
     this.roundupUnit =
       rawUnit && rawUnit > 0 ? BigInt(rawUnit) : STROOP_PER_UNIT;
 
-    const rawMax = this.configService.get<number>(
-      'PARTNER_ROUNDUP_MAX_AMOUNT',
-    );
+    const rawMax = this.configService.get<number>('PARTNER_ROUNDUP_MAX_AMOUNT');
     this.maxRoundupAmount =
       rawMax && rawMax > 0 ? BigInt(rawMax) : 100_000_000n;
 
@@ -153,7 +145,13 @@ export class RoundupApiService {
     }
 
     // ── 4. Persist audit record ─────────────────────────────────────────────
-    const record = await this.persistRecord(apiKey, dto, originalAmount, roundupAmount, status);
+    const record = await this.persistRecord(
+      apiKey,
+      dto,
+      originalAmount,
+      roundupAmount,
+      status,
+    );
 
     // ── 5. Webhook (fire-and-forget) ────────────────────────────────────────
     setImmediate(() => {

@@ -24,7 +24,9 @@ export class PartnerTransactionMetadataDto {
   @MaxLength(255)
   category?: string;
 
-  @ApiPropertyOptional({ description: 'Human-readable description of the transaction' })
+  @ApiPropertyOptional({
+    description: 'Human-readable description of the transaction',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -55,7 +57,7 @@ export class PartnerTransactionMetadataDto {
 export class PartnerTransactionDto {
   @ApiProperty({
     description:
-      'Idempotency key: a unique ID for this transaction within the partner\'s system. ' +
+      "Idempotency key: a unique ID for this transaction within the partner's system. " +
       'Replaying the same value returns the original result without a second deposit.',
     example: 'txn_partner_abc_123',
     maxLength: 128,
