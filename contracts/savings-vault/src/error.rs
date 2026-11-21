@@ -120,4 +120,11 @@ pub enum Error {
     InvalidRewardConfig = 121,
     /// No reward has accrued yet (nothing to claim).
     NoRewardAccrued = 122,
+
+    // --- Upgrade / migration (130-139) ---
+    /// A conflicting state already exists (e.g. a pending upgrade proposal is
+    /// already recorded and a second `propose_upgrade` was attempted).
+    ConflictingState = 130,
+    /// A rollback was attempted but no previous version snapshot is available.
+    NoRollbackAvailable = 131,
 }

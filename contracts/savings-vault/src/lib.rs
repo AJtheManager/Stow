@@ -26,14 +26,17 @@ mod group;
 mod group_split;
 mod insurance;
 mod interest;
+pub mod interest_tiers;
 mod limits;
 mod challenge;
 mod locked;
+pub mod migration;
 pub mod rewards;
 mod split;
 mod storage;
 mod timelock;
 mod types;
+pub mod upgrade;
 mod voting;
 
 #[cfg(test)]
@@ -49,12 +52,22 @@ mod limits_test;
 #[path = "test/split_test.rs"]
 mod split_test;
 
+// Standalone interest tier tests (#619).
+#[cfg(test)]
+#[path = "test/interest_test.rs"]
+mod interest_test;
+
+// Standalone upgrade tests (#618).
+#[cfg(test)]
+#[path = "test/upgrade_test.rs"]
+mod upgrade_test;
+
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String};
 
 use crate::error::Error;
 use crate::types::{
     CompoundFrequency, FlexibleAccount, Goal, Group, GroupLimits, InsuranceClaimRecord, InterestAccount,
-    LockedPlan, Proposal, SplitRequest, UpgradeProposal,
+    LockedPlan, Proposal, SplitRequest, TieredRateConfig, UpgradeProposal,
 };
 
 #[contract]
@@ -430,6 +443,32 @@ impl SavingsVault {
         interest::accrued(&env, owner)
     }
 
+    // --- interest rate tiers (#619) ----------------------------------------
+
+    /// Set the tiered interest-rate configuration. Admin-only.
+    ///
+    /// Rates must be non-decreasing across balance tiers (`low ≤ mid ≤ high`).
+    /// No individual rate or bonus may exceed 10 000 bps (100 %). Emits an
+    /// `InterestRateChanged` event.
+    ///
+    /// Errors: `NotInitialized`, `Unauthorized`, `InvalidParameters`.
+    pub fn set_tiered_rate_config(
+        env: Env,
+        caller: Address,
+        config: TieredRateConfig,
+    ) -> Result<(), Error> {
+        interest_tiers::set_tiered_rate_config(&env, caller, config)
+    }
+
+    /// Return the effective annual interest rate (bps) for an account with
+    /// principal `balance` and remaining lock duration `lock_secs`.
+    ///
+    /// Pass `lock_secs = 0` for accounts with no active lock. This is a
+    /// read-only view; it neither mutates state nor emits events.
+    pub fn query_interest_rate(env: Env, balance: i128, lock_secs: u64) -> u32 {
+        interest_tiers::query_rate(&env, balance, lock_secs)
+    }
+
     // --- emergency mode (#428) --------------------------------------------
 
     /// Activate or deactivate emergency mode. Admin-only.
@@ -489,6 +528,27 @@ impl SavingsVault {
     /// Run post-upgrade state migration. Admin-only.
     pub fn migrate(env: Env, caller: Address) -> Result<(), Error> {
         admin::migrate(&env, caller)
+    }
+
+    /// Roll back to the previous version. Admin-only.
+    ///
+    /// Available only after a successful `execute_upgrade`; the rollback
+    /// snapshot is cleared once used (single-level rollback). Decrements the
+    /// version counter and emits an `upgrade_rolled_back` event.
+    ///
+    /// Errors `NoRollbackAvailable` if no snapshot exists (either no upgrade
+    /// has been executed since initialize, or rollback has already been used
+    /// once since the last upgrade).
+    pub fn rollback_upgrade(env: Env, caller: Address) -> Result<(), Error> {
+        upgrade::rollback_upgrade(&env, caller)
+    }
+
+    /// Whether a rollback snapshot is currently available.
+    ///
+    /// Returns `true` immediately after a successful `execute_upgrade` and
+    /// `false` after `rollback_upgrade` is called (or before the first upgrade).
+    pub fn rollback_available(env: Env) -> bool {
+        upgrade::rollback_available(&env)
     }
 
     // --- insurance fund (#435) --------------------------------------------
