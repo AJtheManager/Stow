@@ -1,4 +1,6 @@
 //! Time-locked admin actions (issue #438).
+#![allow(dead_code)]
+#![allow(clippy::doc_lazy_continuation)]
 //!
 //! Sensitive admin operations cannot execute immediately. Instead, the admin
 //! _queues_ an action — storing a payload and an ETA (the current ledger
