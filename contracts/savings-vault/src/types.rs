@@ -336,6 +336,24 @@ pub struct UpgradeProposal {
     pub execute_after: u64,
 }
 
+/// Snapshot of the state before the most recent `execute_upgrade`, kept in
+/// instance storage under `DataKey::PreviousVersion` to enable a one-step
+/// rollback via `rollback_upgrade`.
+///
+/// Cleared by `rollback_upgrade` so only a single rollback level is
+/// supported per upgrade cycle. After rollback, a fresh `propose_upgrade` →
+/// `execute_upgrade` sequence must be used for further changes.
+#[contracttype]
+#[derive(Clone)]
+pub struct PreviousVersionSnapshot {
+    /// The Wasm hash that was installed as part of the upgrade we may roll
+    /// back from. Used to re-install the Wasm on rollback.
+    pub wasm_hash: BytesN<32>,
+    /// The version number before the upgrade (i.e. what `Version` will be
+    /// restored to on rollback).
+    pub version: u32,
+}
+
 /// An approved insurance claim that a user can redeem.
 #[contracttype]
 #[derive(Clone)]
@@ -694,6 +712,12 @@ pub enum DataKey {
     PendingUpgrade,
     /// Minimum delay (in seconds) before a proposed upgrade can execute.
     UpgradeDelay,
+    /// Rollback snapshot: stores `PreviousVersionSnapshot`. Written by
+    /// `execute_upgrade`, cleared by `rollback_upgrade`.
+    ///
+    /// Durability: instance — single small record, same lifecycle as
+    /// `PendingUpgrade`. Absent when no rollback is available.
+    PreviousVersion,
 
     // --- Insurance fund (#435) ---
     /// Insurance fund pool balance.
