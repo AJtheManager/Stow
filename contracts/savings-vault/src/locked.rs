@@ -262,11 +262,7 @@ pub fn early_withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> 
 /// is in emergency mode. Bypasses the timelock and incurs no penalty, and is
 /// deliberately not guarded by `require_not_paused` so funds remain
 /// reachable even while the vault is paused.
-pub fn emergency_withdraw(
-    env: &Env,
-    owner: Address,
-    plan_id: u64,
-) -> Result<(), Error> {
+pub fn emergency_withdraw(env: &Env, owner: Address, plan_id: u64) -> Result<(), Error> {
     extend_instance_ttl(env);
     owner.require_auth();
 
@@ -275,7 +271,11 @@ pub fn emergency_withdraw(
     }
 
     let key = DataKey::Locked(plan_id);
-    let mut plan: LockedPlan = env.storage().persistent().get(&key).ok_or(Error::NotFound)?;
+    let mut plan: LockedPlan = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .ok_or(Error::NotFound)?;
     storage::extend_persistent_ttl(env, &key);
 
     if plan.owner != owner {
