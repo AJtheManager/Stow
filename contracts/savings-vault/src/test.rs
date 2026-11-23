@@ -30,6 +30,12 @@ mod recurring_test;
 #[path = "test/multisig_test.rs"]
 mod multisig_test;
 
+#[path = "test/rollover_test.rs"]
+mod rollover_test;
+
+#[path = "test/conditional_test.rs"]
+mod conditional_test;
+
 #[contract]
 struct ReentrantToken;
 
@@ -5436,4 +5442,121 @@ fn insurance_premium_collected_on_deposit() {
         client.get_account(&user).balance,
         DEPOSIT - EXPECTED_PREMIUM,
     );
+}
+
+/// Partial liquidation pays the penalty only on the liquidated slice, keeps
+/// the remainder in the plan, and supports repeated liquidations.
+#[test]
+fn partial_liquidate_penalizes_slice_and_preserves_remainder() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, token) = setup_with_token(&env);
+    let token_admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    const LOCKED: i128 = 100_000_000; // 100 USDC
+    const PENALTY_BPS: u32 = 500; // 5%
+    mint(&env, &token, &token_admin, &owner, LOCKED);
+    client.set_early_withdraw_penalty_bps(&PENALTY_BPS);
+    client.set_penalty_recipient(&recipient);
+
+    let now: u64 = 1_000_000;
+    set_ledger_time(&env, now, 100);
+    let plan_id = client.locked_create(&owner, &LOCKED, &(now + 10_000));
+
+    let token_client = soroban_sdk::token::Client::new(&env, &token);
+    let owner_before = token_client.balance(&owner);
+
+    // Liquidate 25% -> 25 USDC slice, 1.25 USDC penalty.
+    let liquidated = client.partial_liquidate(&owner, &plan_id, &2_500);
+    assert_eq!(liquidated, 25_000_000);
+    assert_eq!(token_client.balance(&owner) - owner_before, 23_750_000);
+    assert_eq!(token_client.balance(&recipient), 1_250_000);
+    assert_eq!(client.locked_plan(&plan_id).balance, 75_000_000);
+
+    // Second liquidation of 50% applies to the remaining 75 USDC -> 37.5 USDC.
+    let liquidated_again = client.partial_liquidate(&owner, &plan_id, &5_000);
+    assert_eq!(liquidated_again, 37_500_000);
+    assert_eq!(client.locked_plan(&plan_id).balance, 37_500_000);
+    assert_eq!(token_client.balance(&recipient), 1_250_000 + 1_875_000);
+}
+
+/// Invalid percentages, non-owners, and zero-sized slices are rejected.
+#[test]
+fn partial_liquidate_rejects_invalid_input() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, token) = setup_with_token(&env);
+    let token_admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let other = Address::generate(&env);
+
+    mint(&env, &token, &token_admin, &owner, 1_000_000);
+    let now: u64 = 1_000_000;
+    set_ledger_time(&env, now, 100);
+    let plan_id = client.locked_create(&owner, &1_000_000, &(now + 10_000));
+
+    assert_eq!(
+        client.try_partial_liquidate(&owner, &plan_id, &0),
+        Err(Ok(Error::InvalidParameters)),
+    );
+    assert_eq!(
+        client.try_partial_liquidate(&owner, &plan_id, &10_001),
+        Err(Ok(Error::InvalidParameters)),
+    );
+    assert_eq!(
+        client.try_partial_liquidate(&other, &plan_id, &1_000),
+        Err(Ok(Error::Unauthorized)),
+    );
+    // A 1 bp slice of a 9_999-unit plan floors to 0 -> InvalidAmount.
+    mint(&env, &token, &token_admin, &owner, 9_999);
+    let dust_plan = client.locked_create(&owner, &9_999, &(now + 10_000));
+    assert_eq!(
+        client.try_partial_liquidate(&owner, &dust_plan, &1),
+        Err(Ok(Error::InvalidAmount)),
+    );
+    assert_eq!(client.locked_plan(&dust_plan).balance, 9_999);
+    assert_eq!(client.locked_plan(&plan_id).balance, 1_000_000);
+}
+
+/// `partial_liquidate` emits a `PartialLiquidation` event with the slice,
+/// penalty and remaining balance.
+#[test]
+fn partial_liquidate_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, token) = setup_with_token(&env);
+    let token_admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+
+    const AMOUNT: i128 = 40_000_000;
+    mint(&env, &token, &token_admin, &owner, AMOUNT);
+    client.set_early_withdraw_penalty_bps(&500);
+
+    let now: u64 = 3_000_000;
+    set_ledger_time(&env, now, 100);
+    let plan_id = client.locked_create(&owner, &AMOUNT, &(now + 10_000));
+
+    set_ledger_time(&env, now + 1, 101);
+    client.partial_liquidate(&owner, &plan_id, &5_000);
+
+    let events = test_events(&env);
+    let (contract_id, topics, data) = events.last().unwrap().clone().into_parts();
+    let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> = (
+        crate::events::TOPIC_PARTIAL_LIQUIDATION,
+        owner.clone(),
+        plan_id,
+    )
+        .into_val(&env);
+    let decoded: (u64, Address, i128, i128, i128, u64) =
+        soroban_sdk::TryFromVal::try_from_val(&env, &data).unwrap();
+
+    assert_eq!(contract_id, client.address);
+    assert_eq!(topics, expected_topics);
+    // 50% of 40 USDC = 20 USDC; penalty 5% of 20 = 1 USDC; remaining 20 USDC.
+    assert_eq!(decoded, (plan_id, owner, 20_000_000, 1_000_000, 20_000_000, now + 1));
 }

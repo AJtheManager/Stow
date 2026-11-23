@@ -47,6 +47,10 @@ pub const TOPIC_LOCKED_WITHDRAW: &str = "locked_withdraw";
 /// penalized withdrawal before `unlock_at`).
 pub const TOPIC_LOCKED_EARLY_WITHDRAW: &str = "locked_early_withdraw";
 
+/// Emitted at the end of a successful `partial_liquidate` call. Data is
+/// `(plan_id, owner, liquidated, penalty, remaining_balance, timestamp)`.
+pub const TOPIC_PARTIAL_LIQUIDATION: &str = "PartialLiquidation";
+
 // --- goal ------------------------------------------------------------------
 /// Emitted at the end of a successful `goal_create` call.
 pub const TOPIC_GOAL_CREATED: &str = "goal_created";
@@ -176,3 +180,29 @@ pub const TOPIC_DELEGATION_REVOKED: &str = "delegation_revoked";
 // --- roundup -----------------------------------------------------------
 /// Emitted when an external transaction's round-up difference is deposited.
 pub const TOPIC_ROUNDUP_DEPOSIT: &str = "roundup_deposit";
+
+// --- locked rollover (#638) ---------------------------------------------
+/// Emitted when an owner enables (or reconfigures) auto-rollover on a plan.
+pub const TOPIC_ROLLOVER_ENABLED: &str = "rollover_enabled";
+/// Emitted when an owner opts out of auto-rollover before maturity.
+pub const TOPIC_ROLLOVER_DISABLED: &str = "rollover_disabled";
+/// Emitted when a matured plan is rolled into a new locked plan.
+///
+/// Topics: `(Symbol("VaultRolledOver"), owner: Address, old_plan_id: u64)`
+/// Data:   `(old_plan_id: u64, new_plan_id: u64, principal: i128,
+///          interest: i128, new_balance: i128, new_unlock_at: u64, timestamp: u64)`
+pub const TOPIC_VAULT_ROLLED_OVER: &str = "VaultRolledOver";
+
+// --- conditional withdrawals (#639) -------------------------------------
+/// Emitted when the admin configures the price oracle.
+pub const TOPIC_PRICE_ORACLE_SET: &str = "price_oracle_set";
+/// Emitted when an owner sets a withdrawal condition.
+pub const TOPIC_WITHDRAWAL_CONDITION_SET: &str = "withdrawal_condition_set";
+/// Emitted when an owner cancels a pending withdrawal condition.
+pub const TOPIC_WITHDRAWAL_CONDITION_CANCELLED: &str = "withdrawal_condition_cancelled";
+/// Emitted when a conditional withdrawal executes.
+///
+/// Topics: `(Symbol("ConditionalWithdrawal"), owner: Address)`
+/// Data:   `(owner: Address, amount: i128, condition: WithdrawalCondition,
+///          observed: i128, new_balance: i128, timestamp: u64)`
+pub const TOPIC_CONDITIONAL_WITHDRAWAL: &str = "ConditionalWithdrawal";
