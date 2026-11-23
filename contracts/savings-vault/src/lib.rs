@@ -11,12 +11,15 @@
 //! - [`group_split`] — pools settled back to members by agreed shares
 //! - [`voting`]   — members vote to spend a group's pool
 //! - [`interest`] — balances that grow by compound interest
+//! - [`rollover`] — locked plans that roll into a new term at maturity
+//! - [`conditional`] — withdrawals gated on price, date or balance conditions
 //!
 //! This is a **skeleton**: every entrypoint is stubbed with `unimplemented!()`
 //! and a `TODO(issue)` describing the work. Each stub is one contributor issue.
 
 mod admin;
 mod challenge;
+mod conditional;
 mod delegation;
 mod error;
 mod events;
@@ -33,6 +36,9 @@ pub mod rewards;
 mod roundup;
 mod multisig;
 mod recurring;
+pub mod rewards;
+mod rollover;
+mod roundup;
 mod storage;
 mod timelock;
 mod types;
@@ -173,6 +179,45 @@ impl SavingsVault {
         flexible::get_account(&env, owner)
     }
 
+    // --- conditional withdrawals (#639) -----------------------------------
+    /// Set the price oracle consulted by price-based withdrawal conditions.
+    /// Admin-only.
+    pub fn set_price_oracle(env: Env, caller: Address, oracle: Address) -> Result<(), Error> {
+        conditional::set_price_oracle(&env, caller, oracle)
+    }
+
+    /// The configured price oracle, if any.
+    pub fn price_oracle(env: Env) -> Option<Address> {
+        conditional::price_oracle(&env)
+    }
+
+    /// Register a withdrawal of `amount` from the owner's flexible account
+    /// that may only execute once `condition` holds.
+    pub fn set_withdrawal_condition(
+        env: Env,
+        owner: Address,
+        condition: WithdrawalCondition,
+        amount: i128,
+    ) -> Result<(), Error> {
+        conditional::set_withdrawal_condition(&env, owner, condition, amount)
+    }
+
+    /// Cancel the owner's pending conditional withdrawal.
+    pub fn cancel_withdrawal_condition(env: Env, owner: Address) -> Result<(), Error> {
+        conditional::cancel_withdrawal_condition(&env, owner)
+    }
+
+    /// The owner's pending conditional withdrawal, if any.
+    pub fn withdrawal_condition(env: Env, owner: Address) -> Option<ConditionalWithdrawalRule> {
+        conditional::get_withdrawal_condition(&env, owner)
+    }
+
+    /// Execute the owner's conditional withdrawal once its condition holds.
+    /// Permissionless; funds are always paid to `owner`.
+    pub fn execute_conditional_withdrawal(env: Env, owner: Address) -> Result<i128, Error> {
+        conditional::execute_conditional_withdrawal(&env, owner)
+    }
+
     // --- recurring deposits (#615) ----------------------------------------
     /// Set up a recurring wallet deposit. The owner must authorize the call
     /// and approve the vault as a SEP-41 spender before execution.
@@ -254,6 +299,34 @@ impl SavingsVault {
 
     pub fn locked_plan(env: Env, plan_id: u64) -> Result<LockedPlan, Error> {
         locked::get_plan(&env, plan_id)
+    }
+
+    // --- locked rollover (#638) -------------------------------------------
+    /// Opt a locked plan into auto-rollover at maturity. `lock_period` is the
+    /// new plan's lock length in seconds; `0` reuses the original term.
+    pub fn enable_auto_rollover(
+        env: Env,
+        owner: Address,
+        plan_id: u64,
+        lock_period: u64,
+    ) -> Result<(), Error> {
+        rollover::enable_auto_rollover(&env, owner, plan_id, lock_period)
+    }
+
+    /// Opt a locked plan out of auto-rollover. Only allowed before maturity.
+    pub fn disable_auto_rollover(env: Env, owner: Address, plan_id: u64) -> Result<(), Error> {
+        rollover::disable_auto_rollover(&env, owner, plan_id)
+    }
+
+    /// Roll a matured plan (balance + interest) into a new locked plan and
+    /// close the original. Permissionless; returns the new plan id.
+    pub fn execute_rollover(env: Env, plan_id: u64) -> Result<u64, Error> {
+        rollover::execute_rollover(&env, plan_id)
+    }
+
+    /// A plan's auto-rollover settings, if enabled.
+    pub fn rollover_config(env: Env, plan_id: u64) -> Option<RolloverConfig> {
+        rollover::get_config(&env, plan_id)
     }
 
     // --- goal --------------------------------------------------------------
