@@ -1,3 +1,5 @@
+extern crate std;
+use soroban_sdk::TryFromVal as _;
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
     token::Client as TokenClient,
@@ -74,23 +76,23 @@ fn recurring_execution_updates_schedule_and_emits_event() {
     assert_eq!(token_client.balance(&owner), 0);
 
     let events = env.events().all();
-    let recurring_events: Vec<_> = events
+    let recurring_events: std::vec::Vec<_> = events
         .iter()
         .filter(|event| {
             event
-                .topics
+                .1
                 .get(0)
-                .and_then(|topic| topic.as_symbol())
-                .map(|symbol| symbol.to_string() == "RecurringDepositExecuted")
+                .and_then(|topic| soroban_sdk::Symbol::try_from_val(&env, &topic).ok())
+                .map(|symbol| symbol == soroban_sdk::Symbol::new(&env, "RecurringDepositExecuted"))
                 .unwrap_or(false)
         })
         .collect();
     assert_eq!(recurring_events.len(), 1);
     assert_eq!(
         recurring_events[0]
-            .topics
+            .1
             .get(1)
-            .and_then(|topic| topic.as_address()),
+            .and_then(|topic| Address::try_from_val(&env, &topic).ok()),
         Some(owner)
     );
 }
