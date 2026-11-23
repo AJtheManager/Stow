@@ -1,4 +1,4 @@
-﻿#![no_std]
+#![no_std]
 //! # Stow Savings Vault
 //!
 //! Non-custodial savings on Soroban. Funds move only under contract rules.
@@ -16,6 +16,8 @@
 //! and a `TODO(issue)` describing the work. Each stub is one contributor issue.
 
 mod admin;
+mod challenge;
+mod collateral;
 mod delegation;
 mod error;
 mod events;
@@ -27,7 +29,6 @@ mod group_split;
 mod insurance;
 mod interest;
 mod limits;
-mod challenge;
 mod locked;
 pub mod rewards;
 mod storage;
@@ -43,12 +44,17 @@ mod test;
 #[path = "test/limits_test.rs"]
 mod limits_test;
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String};
+#[cfg(test)]
+#[path = "test/collateral_test.rs"]
+mod collateral_test;
+
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String, Vec};
 
 use crate::error::Error;
 use crate::types::{
-    CompoundFrequency, FlexibleAccount, Goal, Group, GroupLimits, InsuranceClaimRecord, InterestAccount,
-    LockedPlan, Proposal, UpgradeProposal,
+    Challenge, CollateralState, CompoundFrequency, FlexibleAccount, Goal, Group, GroupLimits,
+    InsuranceClaimRecord, InterestAccount, LoanRecord, LockedPlan, Proposal, RewardState,
+    RewardsConfig, UpgradeProposal,
 };
 
 #[contract]
@@ -461,7 +467,11 @@ impl SavingsVault {
     }
 
     /// Propose an upgrade with a timelock delay.
-    pub fn propose_upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+    pub fn propose_upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), Error> {
         admin::propose_upgrade(&env, caller, new_wasm_hash)
     }
 
@@ -536,5 +546,183 @@ impl SavingsVault {
     pub fn insurance_claim(env: Env, claimant: Address) -> Result<InsuranceClaimRecord, Error> {
         insurance::get_claim(&env, claimant)
     }
-}
 
+    // --- rewards (#440) ---------------------------------------------------
+
+    /// The current rewards config.
+    pub fn reward_config(env: Env) -> RewardsConfig {
+        rewards::get_config(&env)
+    }
+
+    /// Set the rewards config. Admin-only.
+    pub fn reward_set_config(
+        env: Env,
+        caller: Address,
+        config: RewardsConfig,
+    ) -> Result<(), Error> {
+        rewards::set_config(&env, caller, config)
+    }
+
+    /// Fund the reward pool. Admin-only.
+    pub fn reward_fund(env: Env, caller: Address, amount: i128) -> Result<(), Error> {
+        rewards::fund_pool(&env, caller, amount)
+    }
+
+    /// Current reward pool balance.
+    pub fn reward_pool_balance(env: Env) -> i128 {
+        rewards::pool_balance(&env)
+    }
+
+    /// Ping to record caller presence for streak tracking.
+    pub fn reward_ping(env: Env, owner: Address) -> Result<(), Error> {
+        rewards::ping(&env, owner)
+    }
+
+    /// Accrue rewards for `owner` and return the amount credited.
+    pub fn reward_accrue(env: Env, owner: Address) -> Result<i128, Error> {
+        rewards::accrue(&env, owner)
+    }
+
+    /// Claim accrued rewards for `owner`.
+    pub fn reward_claim(env: Env, owner: Address) -> Result<i128, Error> {
+        rewards::claim(&env, owner)
+    }
+
+    /// Read the reward state for `owner`.
+    pub fn reward_state(env: Env, owner: Address) -> Option<RewardState> {
+        rewards::get_reward_state(&env, owner)
+    }
+
+    // --- savings challenge (#442) -----------------------------------------
+
+    /// Create a savings challenge. Returns the new challenge id.
+    pub fn create_challenge(
+        env: Env,
+        creator: Address,
+        target_amount: i128,
+        entry_fee: i128,
+        deadline: u64,
+        min_participants: u32,
+    ) -> Result<u64, Error> {
+        challenge::create(
+            &env,
+            creator,
+            target_amount,
+            entry_fee,
+            deadline,
+            min_participants,
+        )
+    }
+
+    /// Join an existing challenge and pay the entry fee.
+    pub fn join_challenge(env: Env, participant: Address, challenge_id: u64) -> Result<(), Error> {
+        challenge::join(&env, participant, challenge_id)
+    }
+
+    /// Save `amount` toward a challenge target.
+    pub fn save_challenge(
+        env: Env,
+        participant: Address,
+        challenge_id: u64,
+        amount: i128,
+    ) -> Result<(), Error> {
+        challenge::save(&env, participant, challenge_id, amount)
+    }
+
+    /// Claim the prize pool if the caller reached the target.
+    pub fn claim_winner(env: Env, participant: Address, challenge_id: u64) -> Result<(), Error> {
+        challenge::claim_winner(&env, participant, challenge_id)
+    }
+
+    /// Refund entry fees when the deadline passed and nobody won.
+    pub fn refund_expired(env: Env, caller: Address, challenge_id: u64) -> Result<(), Error> {
+        challenge::refund_expired(&env, caller, challenge_id)
+    }
+
+    /// Read a challenge record (or `NotFound`).
+    pub fn get_challenge(env: Env, challenge_id: u64) -> Result<Challenge, Error> {
+        challenge::get_challenge(&env, challenge_id)
+    }
+
+    // --- savings vault loan collateralization (#645) ----------------------
+
+    /// Register `lender` as an authorised lender. Admin-only.
+    pub fn register_lender(env: Env, caller: Address, lender: Address) -> Result<(), Error> {
+        collateral::register_lender(&env, caller, lender)
+    }
+
+    /// Deregister a lender. Admin-only.
+    pub fn deregister_lender(env: Env, caller: Address, lender: Address) -> Result<(), Error> {
+        collateral::deregister_lender(&env, caller, lender)
+    }
+
+    /// Whether `lender` is registered.
+    pub fn is_registered_lender(env: Env, lender: Address) -> bool {
+        collateral::is_registered_lender(&env, &lender)
+    }
+
+    /// Enable the caller's vault as collateral for `loan_id`.
+    ///
+    /// Pass `loan_id = 0` to create a new loan; pass an existing id to join it.
+    /// Returns the loan id (new or existing).
+    pub fn enable_as_collateral(
+        env: Env,
+        owner: Address,
+        loan_id: u64,
+        borrow_ratio_bps: u32,
+        liquidation_ratio_bps: u32,
+    ) -> Result<u64, Error> {
+        collateral::enable_as_collateral(
+            &env,
+            owner,
+            loan_id,
+            borrow_ratio_bps,
+            liquidation_ratio_bps,
+        )
+    }
+
+    /// Disable the caller's vault as collateral. Only permitted when debt is 0.
+    pub fn disable_collateral(env: Env, owner: Address) -> Result<(), Error> {
+        collateral::disable_collateral(&env, owner)
+    }
+
+    /// Record a borrow of `amount` against `owner`'s vault. Lender-only.
+    pub fn collateral_borrow(
+        env: Env,
+        lender: Address,
+        owner: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        collateral::record_borrow(&env, lender, owner, amount)
+    }
+
+    /// Record a repayment of `amount` against `owner`'s vault. Lender-only.
+    pub fn collateral_repay(
+        env: Env,
+        lender: Address,
+        owner: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        collateral::record_repay(&env, lender, owner, amount)
+    }
+
+    /// Liquidate `owner`'s vault if undercollateralized. Permissionless.
+    pub fn liquidate(env: Env, owner: Address) -> Result<(), Error> {
+        collateral::liquidate(&env, owner)
+    }
+
+    /// Read the collateral state for `owner` (or `NotFound`).
+    pub fn collateral_state(env: Env, owner: Address) -> Result<CollateralState, Error> {
+        collateral::get_collateral_state(&env, owner)
+    }
+
+    /// Read the loan record for `loan_id` (or `NotFound`).
+    pub fn loan_record(env: Env, loan_id: u64) -> Result<LoanRecord, Error> {
+        collateral::get_loan_record(&env, loan_id)
+    }
+
+    /// Read the vault owner addresses backing `loan_id`.
+    pub fn loan_vaults(env: Env, loan_id: u64) -> Vec<Address> {
+        collateral::get_loan_vaults(&env, loan_id)
+    }
+}

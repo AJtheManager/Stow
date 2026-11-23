@@ -1,5 +1,10 @@
 use soroban_sdk::{contracttype, Address, BytesN, Map, String, Vec};
 
+// NOTE(#648): the `boost-nft` sibling crate is WIP and not yet publishable.
+// DataKey::BoostNft and DataKey::BoostState, plus the `BoostState` struct and
+// the `Tier` enum, will be added here once boost-nft lands. For now they are
+// omitted so types.rs compiles on this branch.
+
 // ---------------------------------------------------------------------------
 // Rewards (new for #440)
 // ---------------------------------------------------------------------------
@@ -427,5 +432,237 @@ pub enum DataKey {
     /// Durability: persistent — kept out of the `Group` record so
     /// contributing does not grow it. TTL: bumped on every read/write.
     GroupContribution(u64, Address),
+
+    // --- Delegation (#644) ---
+    /// `Delegation` by (owner, delegate) pair.
+    ///
+    /// Durability: persistent. TTL: bumped on every read/write.
+    Delegation(Address, Address),
+
+    // --- Fees (#430) ---
+    /// Protocol fee rate in basis points.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    FeeBps,
+    /// Address that receives protocol fees.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    FeeRecipient,
+
+    // --- Challenge (#442) ---
+    /// `Challenge` by id.
+    ///
+    /// Durability: persistent. TTL: bumped on every read/write.
+    Challenge(u64),
+    /// Monotonic counter for challenge ids.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    NextChallengeId,
+
+    // --- Rewards (#440) ---
+    /// Admin-configurable rewards config (`RewardsConfig`).
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    RewardsConfig,
+    /// Reward pool balance in token stroops.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    RewardPoolBalance,
+    /// Per-owner reward tracking (`RewardState`).
+    ///
+    /// Durability: persistent. TTL: bumped on every read/write.
+    RewardState(Address),
+
+    // --- Timelock (#438) ---
+    /// Configured timelock delay in seconds.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    TimelockDelay,
+    /// Monotonic counter for timelock action ids.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    NextTimelockId,
+    /// `QueuedAction` by id.
+    ///
+    /// Durability: persistent. TTL: bumped on every read/write.
+    QueuedAction(u64),
+
+    // --- Collateral (#645) ---
+    /// `CollateralState` by owner address.
+    ///
+    /// Durability: persistent. TTL: bumped on every read/write.
+    CollateralState(Address),
+    /// `LoanRecord` by loan id (embeds the backing vault owner addresses).
+    ///
+    /// Durability: persistent. TTL: bumped on every read/write.
+    LoanRecord(u64),
+    /// Monotonic counter for loan ids.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    NextLoanId,
+    /// Registered lender address. Present means the address is authorised to
+    /// record borrows and repayments against vaults.
+    ///
+    /// Durability: instance. TTL: bumped with rest of instance storage.
+    RegisteredLender(Address),
 }
 
+// ---------------------------------------------------------------------------
+// Delegation (#644)
+// ---------------------------------------------------------------------------
+
+/// Permission level for a delegation.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum PermissionLevel {
+    ViewOnly = 0,
+    Deposit = 1,
+    Full = 2,
+}
+
+/// A delegation record: `owner` grants `delegate` access at `level`.
+#[contracttype]
+#[derive(Clone)]
+pub struct Delegation {
+    pub owner: Address,
+    pub delegate: Address,
+    pub level: PermissionLevel,
+    /// Optional expiry ledger timestamp. `None` means no expiry.
+    pub expires_at: Option<u64>,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Challenge (#442)
+// ---------------------------------------------------------------------------
+
+/// Status of a savings challenge.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ChallengeStatus {
+    Open = 0,
+    Won = 1,
+    Expired = 2,
+}
+
+/// A single participant in a challenge.
+#[contracttype]
+#[derive(Clone)]
+pub struct ChallengeParticipant {
+    pub address: Address,
+    /// Amount saved toward the target so far.
+    pub saved: i128,
+    /// Entry fee paid by this participant.
+    pub fee_paid: i128,
+}
+
+/// A savings challenge record.
+#[contracttype]
+#[derive(Clone)]
+pub struct Challenge {
+    pub id: u64,
+    pub creator: Address,
+    pub target_amount: i128,
+    pub entry_fee: i128,
+    pub deadline: u64,
+    pub min_participants: u32,
+    pub prize_pool: i128,
+    pub status: ChallengeStatus,
+    pub winner: Option<Address>,
+    pub participants: Vec<ChallengeParticipant>,
+    pub created_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Timelock (#438)
+// ---------------------------------------------------------------------------
+
+/// Status of a queued timelock action.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ActionStatus {
+    Pending = 0,
+    Executed = 1,
+    Cancelled = 2,
+}
+
+/// Which admin mutation the timelock guards.
+#[contracttype]
+#[derive(Clone)]
+pub enum TimelockAction {
+    SetAdmin(Address),
+    Upgrade(BytesN<32>),
+    SetDepositCap(i128),
+    SetMinDeposit(i128),
+    SetEarlyWithdrawPenaltyBps(u32),
+    SetPenaltyRecipient(Address),
+    SetMinLockPeriod(u64),
+    SetInterestRate(u32),
+    SetInterestFrequency(CompoundFrequency),
+    SetTimelockDelay(u64),
+}
+
+/// A queued timelock entry.
+#[contracttype]
+#[derive(Clone)]
+pub struct QueuedAction {
+    pub id: u64,
+    pub action: TimelockAction,
+    /// Earliest ledger timestamp at which this action may be executed.
+    pub eta: u64,
+    /// Latest ledger timestamp at which this action may be executed.
+    pub expires_at: u64,
+    pub status: ActionStatus,
+    pub queued_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Collateral (#645)
+// ---------------------------------------------------------------------------
+
+/// Per-vault collateral state, stored under `DataKey::CollateralState(owner)`.
+///
+/// ## Ratio model
+///
+/// `borrow_ratio_bps`      — maximum borrowed / balance, in basis points.
+///                           Default 8_000 (80 %).
+/// `liquidation_ratio_bps` — borrowed / balance threshold that triggers
+///                           liquidation, in basis points.
+///                           Default 9_000 (90 %). Must be > borrow_ratio_bps.
+///
+/// `max_borrow = balance * borrow_ratio_bps / 10_000` (rounded down).
+/// `min_balance_required  = borrowed * 10_000 / borrow_ratio_bps` (rounded up).
+/// Liquidation allowed when `borrowed * 10_000 > balance * liquidation_ratio_bps`.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct CollateralState {
+    pub owner: Address,
+    /// Whether this vault is currently enabled as collateral.
+    pub enabled: bool,
+    /// The loan id this vault is backing. `0` means not currently backing any loan.
+    pub loan_id: u64,
+    /// Amount currently borrowed against this vault, in token stroops.
+    pub borrowed: i128,
+    /// Collateral borrow ratio in basis points (e.g. 8_000 = 80 %).
+    pub borrow_ratio_bps: u32,
+    /// Liquidation threshold in basis points (e.g. 9_000 = 90 %).
+    /// Must be > `borrow_ratio_bps`.
+    pub liquidation_ratio_bps: u32,
+}
+
+/// A loan record: tracks the total borrowed against a set of collateral vaults.
+/// Stored under `DataKey::LoanRecord(loan_id)`. The backing vault owner
+/// addresses are embedded here so we don't need a separate storage key.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct LoanRecord {
+    pub loan_id: u64,
+    /// The registered lender that created this loan.
+    pub lender: Address,
+    /// Total amount borrowed against all vaults backing this loan.
+    pub total_borrowed: i128,
+    /// Owner addresses of the vaults backing this loan.
+    pub vaults: Vec<Address>,
+    pub created_at: u64,
+}

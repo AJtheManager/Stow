@@ -1,4 +1,6 @@
 //! Savings challenge contracts — issue #442.
+#![allow(dead_code)]
+#![allow(clippy::doc_lazy_continuation)]
 //!
 //! A savings challenge is a fixed-duration competition between two or more
 //! participants who each commit to saving a target amount by a deadline.
@@ -31,9 +33,7 @@
 use soroban_sdk::{symbol_short, Address, Env};
 
 use crate::error::Error;
-use crate::storage::{
-    extend_instance_ttl, extend_persistent_ttl, transfer_in, transfer_out,
-};
+use crate::storage::{extend_instance_ttl, extend_persistent_ttl, transfer_in, transfer_out};
 use crate::types::{Challenge, ChallengeParticipant, ChallengeStatus, DataKey};
 
 // ── Internal helpers ───────────────────────────────────────────────────────
@@ -73,9 +73,9 @@ fn find_participant_index(c: &Challenge, addr: &Address) -> Option<u32> {
 /// * `target_amount` — Stroops each participant must save to win.
 /// * `entry_fee`     — Stroops each participant pays to join (forms the prize pool).
 /// * `deadline`      — Ledger timestamp after which new joins are blocked and
-///                     winners can no longer be claimed (expired state).
+///   winners can no longer be claimed (expired state).
 /// * `min_participants` — Minimum number of joined participants before a winner
-///                        can be declared. Must be ≥ 2.
+///   can be declared. Must be ≥ 2.
 ///
 /// Returns the new challenge id.
 ///
@@ -91,7 +91,7 @@ pub fn create(
     deadline: u64,
     min_participants: u32,
 ) -> Result<u64, Error> {
-    crate::admin::ensure_not_paused(env)?;
+    crate::admin::require_not_paused(env)?;
     extend_instance_ttl(env);
     creator.require_auth();
 
@@ -155,7 +155,7 @@ pub fn create(
 /// - [`Error::OperationExpired`]  if the deadline has passed.
 /// - [`Error::MemberAlreadyExists`] if the caller is already a participant.
 pub fn join(env: &Env, participant: Address, challenge_id: u64) -> Result<(), Error> {
-    crate::admin::ensure_not_paused(env)?;
+    crate::admin::require_not_paused(env)?;
     extend_instance_ttl(env);
     participant.require_auth();
 
@@ -201,13 +201,8 @@ pub fn join(env: &Env, participant: Address, challenge_id: u64) -> Result<(), Er
 /// - [`Error::NotFound`]         if the challenge or the caller's participation does not exist.
 /// - [`Error::GroupClosed`]      if the challenge is not open.
 /// - [`Error::OperationExpired`] if the deadline has passed.
-pub fn save(
-    env: &Env,
-    participant: Address,
-    challenge_id: u64,
-    amount: i128,
-) -> Result<(), Error> {
-    crate::admin::ensure_not_paused(env)?;
+pub fn save(env: &Env, participant: Address, challenge_id: u64, amount: i128) -> Result<(), Error> {
+    crate::admin::require_not_paused(env)?;
     extend_instance_ttl(env);
     participant.require_auth();
 
@@ -225,8 +220,7 @@ pub fn save(
         return Err(Error::OperationExpired);
     }
 
-    let idx = find_participant_index(&challenge, &participant)
-        .ok_or(Error::NotAMember)?;
+    let idx = find_participant_index(&challenge, &participant).ok_or(Error::NotAMember)?;
 
     transfer_in(env, &participant, amount)?;
 
@@ -257,7 +251,7 @@ pub fn save(
 /// - [`Error::GoalNotReached`]   if the caller has not yet saved `target_amount`.
 /// - [`Error::InvalidParameters`] if not enough participants have joined.
 pub fn claim_winner(env: &Env, participant: Address, challenge_id: u64) -> Result<(), Error> {
-    crate::admin::ensure_not_paused(env)?;
+    crate::admin::require_not_paused(env)?;
     extend_instance_ttl(env);
     participant.require_auth();
 
@@ -277,8 +271,7 @@ pub fn claim_winner(env: &Env, participant: Address, challenge_id: u64) -> Resul
     }
 
     // Find participant and verify target.
-    let idx = find_participant_index(&challenge, &participant)
-        .ok_or(Error::NotAMember)?;
+    let idx = find_participant_index(&challenge, &participant).ok_or(Error::NotAMember)?;
     let p = challenge.participants.get(idx).unwrap();
     if p.saved < challenge.target_amount {
         return Err(Error::GoalNotReached);
@@ -312,7 +305,7 @@ pub fn claim_winner(env: &Env, participant: Address, challenge_id: u64) -> Resul
 /// - [`Error::GroupClosed`]       if already won or already refunded.
 /// - [`Error::TimeWindowNotOpen`] if the deadline has not yet passed.
 pub fn refund_expired(env: &Env, caller: Address, challenge_id: u64) -> Result<(), Error> {
-    crate::admin::ensure_not_paused(env)?;
+    crate::admin::require_not_paused(env)?;
     extend_instance_ttl(env);
     caller.require_auth();
 
@@ -365,7 +358,7 @@ mod tests {
     }
 
     fn mint(env: &Env, token: &Address, to: &Address, amount: i128) {
-        let admin = Address::generate(env);
+        let _admin = Address::generate(env);
         token::StellarAssetClient::new(env, token).mint(to, &amount);
     }
 
@@ -379,9 +372,13 @@ mod tests {
         let (vault, token, creator) = register_vault(&env);
         mint(&env, &token, &creator, 100_000);
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &2u32)
-            .unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &2u32,
+        );
         assert_eq!(id, 1);
     }
 
@@ -409,7 +406,13 @@ mod tests {
         mint(&env, &token, &creator, 100_000);
 
         assert_eq!(
-            vault.try_create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &1u32),
+            vault.try_create_challenge(
+                &creator,
+                &50_000i128,
+                &10_000i128,
+                &(1_000 + 86_400u64),
+                &1u32
+            ),
             Err(Ok(Error::InvalidParameters))
         );
     }
@@ -426,12 +429,16 @@ mod tests {
         mint(&env, &token, &creator, 100_000);
         mint(&env, &token, &participant, 100_000);
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &2u32)
-            .unwrap();
-        vault.join_challenge(&participant, &id).unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &2u32,
+        );
+        vault.join_challenge(&participant, &id);
 
-        let c = vault.get_challenge(&id).unwrap();
+        let c = vault.get_challenge(&id);
         assert_eq!(c.participants.len(), 2);
         assert_eq!(c.prize_pool, 20_000);
     }
@@ -444,9 +451,13 @@ mod tests {
         let (vault, token, creator) = register_vault(&env);
         mint(&env, &token, &creator, 100_000);
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &2u32)
-            .unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &2u32,
+        );
 
         // Creator tries to join again.
         assert_eq!(
@@ -466,9 +477,7 @@ mod tests {
         mint(&env, &token, &p2, 100_000);
 
         let deadline = 1_000 + 86_400u64;
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &deadline, &2u32)
-            .unwrap();
+        let id = vault.create_challenge(&creator, &50_000i128, &10_000i128, &deadline, &2u32);
 
         advance(&env, 86_401);
 
@@ -488,12 +497,16 @@ mod tests {
         let (vault, token, creator) = register_vault(&env);
         mint(&env, &token, &creator, 200_000);
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &2u32)
-            .unwrap();
-        vault.save_challenge(&creator, &id, &30_000i128).unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &2u32,
+        );
+        vault.save_challenge(&creator, &id, &30_000i128);
 
-        let c = vault.get_challenge(&id).unwrap();
+        let c = vault.get_challenge(&id);
         let p = c.participants.get(0).unwrap();
         assert_eq!(p.saved, 30_000);
     }
@@ -512,25 +525,21 @@ mod tests {
         let target = 50_000i128;
         let deadline = 1_000 + 86_400u64;
 
-        let id = vault
-            .create_challenge(&creator, &target, &entry_fee, &deadline, &2u32)
-            .unwrap();
-        vault.join_challenge(&p2, &id).unwrap();
+        let id = vault.create_challenge(&creator, &target, &entry_fee, &deadline, &2u32);
+        vault.join_challenge(&p2, &id);
 
         // Creator saves the full target.
-        vault
-            .save_challenge(&creator, &id, &target)
-            .unwrap();
+        vault.save_challenge(&creator, &id, &target);
 
         let tok = token::Client::new(&env, &token);
         let before = tok.balance(&creator);
-        vault.claim_winner(&creator, &id).unwrap();
+        vault.claim_winner(&creator, &id);
         let after = tok.balance(&creator);
 
         // Won: entry_fee * 2 = 20_000.
         assert_eq!(after - before, 20_000);
 
-        let c = vault.get_challenge(&id).unwrap();
+        let c = vault.get_challenge(&id);
         assert_eq!(c.status, ChallengeStatus::Won);
         assert_eq!(c.winner, Some(creator.clone()));
     }
@@ -545,13 +554,17 @@ mod tests {
         mint(&env, &token, &creator, 200_000);
         mint(&env, &token, &p2, 200_000);
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &2u32)
-            .unwrap();
-        vault.join_challenge(&p2, &id).unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &2u32,
+        );
+        vault.join_challenge(&p2, &id);
 
         // Only saved 30_000 of 50_000.
-        vault.save_challenge(&creator, &id, &30_000i128).unwrap();
+        vault.save_challenge(&creator, &id, &30_000i128);
 
         assert_eq!(
             vault.try_claim_winner(&creator, &id),
@@ -568,10 +581,14 @@ mod tests {
         mint(&env, &token, &creator, 200_000);
 
         // min_participants = 3 but only creator has joined.
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &3u32)
-            .unwrap();
-        vault.save_challenge(&creator, &id, &50_000i128).unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &3u32,
+        );
+        vault.save_challenge(&creator, &id, &50_000i128);
 
         assert_eq!(
             vault.try_claim_winner(&creator, &id),
@@ -594,11 +611,9 @@ mod tests {
         let entry_fee = 10_000i128;
         let deadline = 1_000 + 86_400u64;
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &entry_fee, &deadline, &2u32)
-            .unwrap();
-        vault.join_challenge(&p2, &id).unwrap();
-        vault.save_challenge(&creator, &id, &20_000i128).unwrap();
+        let id = vault.create_challenge(&creator, &50_000i128, &entry_fee, &deadline, &2u32);
+        vault.join_challenge(&p2, &id);
+        vault.save_challenge(&creator, &id, &20_000i128);
 
         let tok = token::Client::new(&env, &token);
         let creator_before = tok.balance(&creator);
@@ -606,14 +621,14 @@ mod tests {
 
         // Advance past deadline.
         advance(&env, 86_401);
-        vault.refund_expired(&creator, &id).unwrap();
+        vault.refund_expired(&creator, &id);
 
         // Creator gets fee + 20_000 savings back.
         assert_eq!(tok.balance(&creator) - creator_before, entry_fee + 20_000);
         // p2 gets entry fee back.
         assert_eq!(tok.balance(&p2) - p2_before, entry_fee);
 
-        let c = vault.get_challenge(&id).unwrap();
+        let c = vault.get_challenge(&id);
         assert_eq!(c.status, ChallengeStatus::Expired);
     }
 
@@ -625,9 +640,13 @@ mod tests {
         let (vault, token, creator) = register_vault(&env);
         mint(&env, &token, &creator, 100_000);
 
-        let id = vault
-            .create_challenge(&creator, &50_000i128, &10_000i128, &(1_000 + 86_400u64), &2u32)
-            .unwrap();
+        let id = vault.create_challenge(
+            &creator,
+            &50_000i128,
+            &10_000i128,
+            &(1_000 + 86_400u64),
+            &2u32,
+        );
 
         assert_eq!(
             vault.try_refund_expired(&creator, &id),

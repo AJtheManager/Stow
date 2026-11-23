@@ -110,4 +110,44 @@ pub enum Error {
     InvalidRewardConfig = 121,
     /// No reward has accrued yet (nothing to claim).
     NoRewardAccrued = 122,
+
+    // --- State conflicts (130-139) ---
+    /// An operation conflicts with existing state (e.g. duplicate delegation).
+    ConflictingState = 130,
+    /// An address value is invalid for this context (e.g. self-delegation).
+    InvalidAddress = 131,
+    /// A timestamp value is invalid for this context (e.g. expiry in the past).
+    InvalidTimestamp = 132,
+    /// Division by zero in a fee or ratio calculation.
+    DivisionByZero = 133,
+
+    // --- Timelock (140-149) ---
+    /// The timelock action has already been executed.
+    TimelockAlreadyExecuted = 140,
+    /// The timelock action was cancelled.
+    TimelockCancelled = 141,
+    /// The timelock ETA has not yet been reached.
+    TimelockNotReady = 142,
+    /// The timelock grace period has expired; the action can no longer execute.
+    TimelockExpired = 143,
+    /// The requested timelock delay is below the minimum allowed.
+    TimelockDelayTooShort = 144,
+    /// The requested timelock delay is above the maximum allowed.
+    TimelockDelayTooLong = 145,
+
+    // --- Collateral (150-159) ---
+    /// Vault is already enabled as collateral.
+    CollateralAlreadyEnabled = 150,
+    /// Vault is not enabled as collateral.
+    CollateralNotEnabled = 151,
+    /// Borrow would exceed the vault's collateral ratio.
+    CollateralLimitExceeded = 152,
+    /// Position is healthy; liquidation is not permitted.
+    PositionHealthy = 153,
+    /// Withdrawal would leave balance below the required collateral lock.
+    CollateralWithdrawalBlocked = 154,
+    /// Caller is not a registered lender.
+    NotRegisteredLender = 155,
+    /// Vault is already backing another loan.
+    VaultAlreadyBacking = 156,
 }
