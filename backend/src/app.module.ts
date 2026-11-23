@@ -74,6 +74,15 @@ import { MlModule } from './ml/ml.module';
             ttl: configService.get<number>('RATE_LIMIT_WRITE_TTL_MS') ?? 60_000,
             limit: configService.get<number>('RATE_LIMIT_WRITE_LIMIT') ?? 30,
           },
+          {
+            name: 'partner',
+            ttl:
+              configService.get<number>('PARTNER_ROUNDUP_THROTTLE_TTL_MS') ??
+              60_000,
+            limit:
+              configService.get<number>('PARTNER_ROUNDUP_THROTTLE_LIMIT') ??
+              60,
+          },
         ],
         setHeaders: true,
       }),
