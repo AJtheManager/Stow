@@ -137,9 +137,14 @@ pub fn withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> Result
         return Err(Error::StillLocked);
     }
 
+    let new_balance = plan.balance.checked_sub(amount).ok_or(Error::Overflow)?;
+
+    // Collateral lock: even an unlocked plan backing a loan cannot be
+    // withdrawn below the minimum locked balance for outstanding debt.
+    crate::collateral::check_withdrawal(env, &owner, new_balance)?;
+
     storage::transfer_out(env, &owner, amount)?;
 
-    let new_balance = plan.balance.checked_sub(amount).ok_or(Error::Overflow)?;
     plan.balance = new_balance;
     env.storage().persistent().set(&key, &plan);
     storage::extend_persistent_ttl(env, &key);
@@ -237,6 +242,11 @@ pub fn early_withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> 
     let bps = admin::early_withdraw_penalty_bps(env);
     let penalty = amount.checked_mul(bps as i128).ok_or(Error::Overflow)? / 10_000;
     let net = amount.checked_sub(penalty).ok_or(Error::Overflow)?;
+
+    // Collateral lock: the *gross* amount leaves the plan, so the new plan
+    // balance is what the collateral check must see.
+    let new_plan_balance = plan.balance.checked_sub(amount).ok_or(Error::Overflow)?;
+    crate::collateral::check_withdrawal(env, &owner, new_plan_balance)?;
 
     if net > 0 {
         storage::transfer_out(env, &owner, net)?;
@@ -344,6 +354,12 @@ pub fn emergency_withdraw(env: &Env, owner: Address, plan_id: u64) -> Result<(),
     }
 
     let amount = plan.balance;
+
+    // Collateral lock applies even in emergency mode: a vault backing a loan
+    // must not be drained below the minimum locked balance. If the owner needs
+    // the funds, the position must be liquidated or the debt repaid first.
+    crate::collateral::check_withdrawal(env, &owner, 0)?;
+
     storage::transfer_out(env, &owner, amount)?;
 
     plan.balance = 0;

@@ -1,4 +1,5 @@
 ﻿//! Event topic registry.
+#![allow(dead_code)]
 //!
 //! The off-chain indexer decodes contract events by topic. This module is
 //! the canonical, compile-checked registry of topic name strings; the full
@@ -21,8 +22,6 @@ pub const EVENT_SCHEMA_VERSION: u32 = 1;
 pub const TOPIC_INIT: &str = "init";
 /// Emitted at the end of a successful `set_admin` call.
 pub const TOPIC_ADMIN_SET: &str = "admin_set";
-/// Emitted at the end of a successful `upgrade` call.
-pub const TOPIC_UPGRADED: &str = "upgraded";
 
 // --- pause mechanism -------------------------------------------------------
 /// Emitted when the vault is paused (via `pause` or `set_paused(true)`).

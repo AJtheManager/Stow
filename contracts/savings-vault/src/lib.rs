@@ -52,7 +52,11 @@ mod test;
 #[path = "test/limits_test.rs"]
 mod limits_test;
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String};
+#[cfg(test)]
+#[path = "test/collateral_test.rs"]
+mod collateral_test;
+
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String, Vec};
 
 use crate::error::Error;
 use crate::types::{

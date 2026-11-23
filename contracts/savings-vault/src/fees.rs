@@ -1,4 +1,5 @@
 //! Flexible fee structure — issue #430.
+#![allow(dead_code)]
 //!
 //! Provides configurable fee percentages, fee recipient management, and
 //! optimized fee calculation for all vault operations.

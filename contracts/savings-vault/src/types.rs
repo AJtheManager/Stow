@@ -1,5 +1,10 @@
 use soroban_sdk::{contracttype, Address, BytesN, Map, String, Vec};
 
+// NOTE(#648): the `boost-nft` sibling crate is WIP and not yet publishable.
+// DataKey::BoostNft and DataKey::BoostState, plus the `BoostState` struct and
+// the `Tier` enum, will be added here once boost-nft lands. For now they are
+// omitted so types.rs compiles on this branch.
+
 // ---------------------------------------------------------------------------
 // Rewards (new for #440)
 // ---------------------------------------------------------------------------

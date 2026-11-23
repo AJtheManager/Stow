@@ -1,4 +1,6 @@
 #![cfg(test)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::cloned_ref_to_slice_refs)]
 //! Test skeleton. Each `#[ignore]`d test is a placeholder for a contributor.
 //!
 //! Pattern: register the contract, register a SEP-41 token (StellarAssetClient
@@ -11,16 +13,19 @@
 extern crate std;
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl,
+    contract, contractimpl,
     testutils::{Address as _, Events as _, Ledger, LedgerInfo},
     token::StellarAssetClient,
     Address, BytesN, Env, IntoVal, Map, String, TryFromVal, Vec,
 };
 
+extern crate std;
+use std::string::ToString;
+
 use crate::error::Error;
 use crate::events::{TOPIC_DEPOSIT, TOPIC_WITHDRAW};
 use crate::group_split;
-use crate::types::{CompoundFrequency, PermissionLevel};
+use crate::types::CompoundFrequency;
 use crate::{SavingsVault, SavingsVaultClient};
 use std::string::ToString;
 
@@ -101,7 +106,7 @@ impl ReentrantToken {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn setup(env: &Env) -> SavingsVaultClient {
+fn setup(env: &Env) -> SavingsVaultClient<'_> {
     let contract_id = env.register(SavingsVault, ());
     SavingsVaultClient::new(env, &contract_id)
 }
@@ -224,7 +229,7 @@ pub(crate) fn register_vault(env: &Env) -> (SavingsVaultClient<'_>, Address, Add
 
 /// Mint `amount` stroops of the vault token to `recipient` (bypasses auth for
 /// test convenience).
-fn mint(env: &Env, token: &Address, token_admin: &Address, recipient: &Address, amount: i128) {
+fn mint(env: &Env, token: &Address, _token_admin: &Address, recipient: &Address, amount: i128) {
     let sac = StellarAssetClient::new(env, token);
     env.mock_all_auths();
     sac.mint(recipient, &amount);
@@ -247,6 +252,12 @@ fn set_ledger_time(env: &Env, timestamp: u64, sequence_number: u32) {
 
 fn advance_ledger(env: &Env) {
     set_ledger_time(env, env.ledger().timestamp(), env.ledger().sequence() + 1);
+}
+
+/// Shared helper used by challenge tests: set up vault + token, return
+/// `(client, token_address, admin_address)`.
+pub(crate) fn register_vault(env: &Env) -> (SavingsVaultClient<'_>, Address, Address) {
+    setup_with_token(env)
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +304,7 @@ fn flexible_deposit_gas_cost_stays_within_baseline() {
     let owner = Address::generate(&env);
     mint(&env, &token, &token_admin, &owner, 1_000);
 
-    let mut budget = env.budget();
+    let mut budget = env.cost_estimate().budget();
     budget.reset_default();
     client.deposit(&owner, &1_000);
 
@@ -1027,9 +1038,8 @@ fn event_deposit_has_indexed_depositor() {
     let deposit_event = events
         .iter()
         .find(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == TOPIC_DEPOSIT)
                 .unwrap_or(false)
         })
@@ -1039,16 +1049,16 @@ fn event_deposit_has_indexed_depositor() {
     // topic (second topic after the event name) so indexers can efficiently
     // filter deposits by user.
     assert!(
-        deposit_event.topics.len() >= 2,
+        deposit_event.1.len() >= 2,
         "deposit event must have at least 2 topics: event name and depositor address"
     );
 
     let depositor_topic = deposit_event
-        .topics
+        .1
         .get(1)
         .expect("second topic must be depositor address");
     assert!(
-        depositor_topic.as_address().is_some(),
+        soroban_sdk::Address::try_from_val(&env, &depositor_topic).is_ok(),
         "second topic must be an Address (indexed depositor)"
     );
 }
@@ -1078,9 +1088,8 @@ fn event_goal_contribution_has_indexed_goal_id() {
     let contribution_event = events
         .iter()
         .find(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == "goal_contribution")
                 .unwrap_or(false)
         })
@@ -1089,20 +1098,20 @@ fn event_goal_contribution_has_indexed_goal_id() {
     // The goal_contribution event must include goal_id as an indexed topic
     // for efficient filtering.
     assert!(
-        contribution_event.topics.len() >= 2,
+        contribution_event.1.len() >= 2,
         "goal_contribution event must have indexed goal_id"
     );
 
     let goal_id_topic = contribution_event
-        .topics
+        .1
         .get(1)
         .expect("second topic must be goal_id");
     assert!(
-        goal_id_topic.as_u64().is_some(),
+        u64::try_from_val(&env, &goal_id_topic).is_ok(),
         "second topic must be a u64 (indexed goal_id)"
     );
     assert_eq!(
-        goal_id_topic.as_u64().unwrap(),
+        u64::try_from_val(&env, &goal_id_topic).unwrap_or(0u64),
         goal_id,
         "indexed goal_id must match the actual goal"
     );
@@ -1130,9 +1139,8 @@ fn event_deposit_size_is_optimized() {
     let deposit_event = events
         .iter()
         .find(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == TOPIC_DEPOSIT)
                 .unwrap_or(false)
         })
@@ -1147,13 +1155,13 @@ fn event_deposit_size_is_optimized() {
     // It should NOT include the token address (constant per vault instance,
     // can be queried once) or other redundant data.
     assert!(
-        deposit_event.topics.len() <= 3,
+        deposit_event.1.len() <= 3,
         "deposit event should have minimal indexed topics for gas efficiency"
     );
 
     // Verify data payload exists and contains essential fields only.
     assert!(
-        deposit_event.data.is_some(),
+        !deposit_event.2.is_void(),
         "deposit event must have data payload"
     );
 }
@@ -1181,7 +1189,7 @@ fn event_emission_gas_cost_is_reasonable() {
 
     let goal_id = client.goal_create(&owner, &String::from_str(&env, "savings"), &TARGET);
 
-    let mut budget = env.budget();
+    let mut budget = env.cost_estimate().budget();
     budget.reset_default();
 
     // Measure the cost of a single contribution with event emission.
@@ -1232,36 +1240,45 @@ fn event_group_contributions_are_individually_indexed() {
     let first_contrib_events: std::vec::Vec<&TestEvent> = events_after_first
         .iter()
         .filter(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == "group_contribution")
                 .unwrap_or(false)
         })
-        .collect();
-
+        .count();
     assert_eq!(
-        first_contrib_events.len(),
-        1,
+        contrib_event_count_v2, 1,
         "each contribution should emit exactly one event"
     );
 
     // Verify the event has indexed group_id and contributor.
-    let event = first_contrib_events[0];
+    let event = events_after_first
+        .iter()
+        .find(|e| {
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
+                .map(|s| s.to_string() == "group_contribution")
+                .unwrap_or(false)
+        })
+        .expect("group_contribution event must exist");
     assert!(
-        event.topics.len() >= 3,
+        event.1.len() >= 3,
         "group_contribution event must index group_id and contributor"
     );
 
-    let group_id_topic = event.topics.get(1);
-    let contributor_topic = event.topics.get(2);
+    let group_id_topic = event.1.get(1);
+    let contributor_topic = event.1.get(2);
 
     assert!(
-        group_id_topic.and_then(|t| t.as_u64()).is_some(),
+        group_id_topic
+            .and_then(|t| u64::try_from_val(&env, &t).ok())
+            .is_some(),
         "second topic must be indexed group_id"
     );
     assert!(
-        contributor_topic.and_then(|t| t.as_address()).is_some(),
+        contributor_topic
+            .and_then(|t| soroban_sdk::Address::try_from_val(&env, &t).ok())
+            .is_some(),
         "third topic must be indexed contributor address"
     );
 }
@@ -1314,9 +1331,8 @@ fn event_locked_withdraw_has_indexed_parameters() {
     let withdraw_event = events
         .iter()
         .find(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == "locked_withdraw")
                 .unwrap_or(false)
         })
@@ -1324,12 +1340,12 @@ fn event_locked_withdraw_has_indexed_parameters() {
 
     // Verify indexed parameters for efficient filtering.
     assert!(
-        withdraw_event.topics.len() >= 3,
+        withdraw_event.1.len() >= 3,
         "locked_withdraw event must index plan_id and owner"
     );
 
-    let plan_id_topic = withdraw_event.topics.get(1);
-    let owner_topic = withdraw_event.topics.get(2);
+    let plan_id_topic = withdraw_event.1.get(1);
+    let owner_topic = withdraw_event.1.get(2);
 
     assert!(
         plan_id_topic.clone().and_then(|t| t.as_u64()).is_some(),
@@ -1342,7 +1358,9 @@ fn event_locked_withdraw_has_indexed_parameters() {
     );
 
     assert!(
-        owner_topic.and_then(|t| t.as_address()).is_some(),
+        owner_topic
+            .and_then(|t| soroban_sdk::Address::try_from_val(&env, &t).ok())
+            .is_some(),
         "third topic must be indexed owner address"
     );
 }
@@ -1371,9 +1389,8 @@ fn event_goal_reached_is_size_optimized() {
     let reached_event = events
         .iter()
         .find(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == "goal_reached")
                 .unwrap_or(false)
         })
@@ -1384,15 +1401,15 @@ fn event_goal_reached_is_size_optimized() {
     // - Topic 1: goal_id (indexed)
     // - Data: timestamp and target_amount (minimal essential data)
     assert!(
-        reached_event.topics.len() >= 2,
+        reached_event.1.len() >= 2,
         "goal_reached must have indexed goal_id"
     );
     assert!(
-        reached_event.topics.len() <= 3,
+        reached_event.1.len() <= 3,
         "goal_reached should not include redundant indexed parameters"
     );
 
-    let goal_id_topic = reached_event.topics.get(1);
+    let goal_id_topic = reached_event.1.get(1);
     assert!(
         goal_id_topic.clone().and_then(|t| t.as_u64()).is_some(),
         "goal_reached must index goal_id"
@@ -1439,7 +1456,7 @@ fn event_interest_claimed_is_gas_efficient() {
         max_entry_ttl: 3_110_400,
     });
 
-    let mut budget = env.budget();
+    let mut budget = env.cost_estimate().budget();
     budget.reset_default();
 
     // Measure gas cost of interest claim with event emission
@@ -1462,16 +1479,15 @@ fn event_interest_claimed_is_gas_efficient() {
     let claimed_event = events
         .iter()
         .find(|e| {
-            e.topics
-                .get(0)
-                .and_then(|t| t.as_symbol())
+            e.1.get(0)
+                .and_then(|t| soroban_sdk::String::try_from_val(&env, &t).ok())
                 .map(|s| s.to_string() == "interest_claimed")
                 .unwrap_or(false)
         })
         .expect("interest_claimed event must be emitted");
 
     assert!(
-        claimed_event.topics.len() >= 2,
+        claimed_event.1.len() >= 2,
         "interest_claimed must have indexed user address"
     );
 }
@@ -1485,7 +1501,6 @@ fn event_interest_claimed_is_gas_efficient() {
 fn locked_withdraw_before_unlock_rejected_50_usdc() {
     let env = Env::default();
     env.mock_all_auths();
-
     let (client, _admin, token) = setup_with_token(&env);
     let token_admin = Address::generate(&env);
     let owner = Address::generate(&env);
@@ -3658,7 +3673,7 @@ fn group_vote_after_window_rejected() {
         &token,
         &token_admin,
         &creator,
-        &[member_b.clone()],
+        core::slice::from_ref(&member_b),
         VOTING_PERIOD,
     );
     let proposal_id = client.group_propose(&creator, &group_id, &recipient, &1_000_000);
@@ -3692,7 +3707,7 @@ fn group_execute_before_window_closed_rejected() {
         &token,
         &token_admin,
         &creator,
-        &[member_b.clone()],
+        core::slice::from_ref(&member_b),
         VOTING_PERIOD,
     );
     let proposal_id = client.group_propose(&creator, &group_id, &recipient, &1_000_000);
@@ -3725,7 +3740,7 @@ fn group_double_vote_rejected() {
         &token,
         &token_admin,
         &creator,
-        &[member_b.clone()],
+        core::slice::from_ref(&member_b),
         VOTING_PERIOD,
     );
     let proposal_id = client.group_propose(&creator, &group_id, &recipient, &1_000_000);
@@ -3758,7 +3773,7 @@ fn group_vote_by_non_member_rejected() {
         &token,
         &token_admin,
         &creator,
-        &[member_b.clone()],
+        core::slice::from_ref(&member_b),
         VOTING_PERIOD,
     );
     let proposal_id = client.group_propose(&creator, &group_id, &recipient, &1_000_000);
@@ -3835,7 +3850,7 @@ fn group_execute_twice_rejected() {
         &token,
         &token_admin,
         &creator,
-        &[member_b.clone()],
+        core::slice::from_ref(&member_b),
         VOTING_PERIOD,
     );
     let proposal_id = client.group_propose(&creator, &group_id, &recipient, &1_000_000);
