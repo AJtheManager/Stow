@@ -1,3 +1,4 @@
+use soroban_sdk::TryFromVal as _;
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
     token::Client as TokenClient,
@@ -61,10 +62,10 @@ fn request_is_stored_with_the_requested_withdrawal_and_threshold() {
     );
     assert!(events.iter().any(|event| {
         event
-            .topics
+            .1
             .get(0)
-            .and_then(|topic| topic.as_symbol())
-            .map(|symbol| symbol.to_string() == TOPIC_GROUP_WITHDRAWAL_REQUESTED)
+            .and_then(|topic| soroban_sdk::Symbol::try_from_val(&env, &topic).ok())
+            .map(|symbol| symbol == soroban_sdk::Symbol::new(&env, TOPIC_GROUP_WITHDRAWAL_REQUESTED))
             .unwrap_or(false)
     }));
 }
@@ -95,10 +96,10 @@ fn approvals_accumulate_and_withdrawal_executes_at_threshold() {
 
     assert!(events.iter().any(|event| {
         event
-            .topics
+            .1
             .get(0)
-            .and_then(|topic| topic.as_symbol())
-            .map(|symbol| symbol.to_string() == TOPIC_GROUP_WITHDRAWAL_EXECUTED)
+            .and_then(|topic| soroban_sdk::Symbol::try_from_val(&env, &topic).ok())
+            .map(|symbol| symbol == soroban_sdk::Symbol::new(&env, TOPIC_GROUP_WITHDRAWAL_EXECUTED))
             .unwrap_or(false)
     }));
 }
