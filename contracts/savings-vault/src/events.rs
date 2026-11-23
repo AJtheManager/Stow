@@ -77,6 +77,14 @@ pub const TOPIC_GROUP_CONTRIBUTION: &str = "group_contribution";
 pub const TOPIC_GROUP_CLOSED: &str = "group_closed";
 /// Emitted once per member during a successful `group_payout_equal` call.
 pub const TOPIC_GROUP_PAYOUT: &str = "group_payout";
+/// Emitted when a multi-signature group withdrawal is requested.
+pub const TOPIC_GROUP_WITHDRAWAL_REQUESTED: &str = "group_withdrawal_requested";
+/// Emitted when a group member approves a pending withdrawal.
+pub const TOPIC_GROUP_WITHDRAWAL_APPROVED: &str = "group_withdrawal_approved";
+/// Emitted when a member rejects a pending group withdrawal.
+pub const TOPIC_GROUP_WITHDRAWAL_REJECTED: &str = "group_withdrawal_rejected";
+/// Emitted when a group withdrawal reaches threshold and is paid.
+pub const TOPIC_GROUP_WITHDRAWAL_EXECUTED: &str = "group_withdrawal_executed";
 
 // --- group split -------------------------------------------------------
 /// Emitted at the end of a successful `group_set_shares` call.
@@ -98,10 +106,6 @@ pub const TOPIC_GROUP_VOTE_CAST: &str = "group_vote_cast";
 /// outcome (`passed`) and the amount actually paid out (`spent`, 0 on a fail).
 pub const TOPIC_GROUP_PROPOSAL_EXECUTED: &str = "group_proposal_executed";
 
-// --- upgrade -----------------------------------------------------------
-/// Emitted at the end of a successful `upgrade` call.
-pub const TOPIC_UPGRADED: &str = "upgraded";
-
 // --- interest ----------------------------------------------------------
 /// Emitted at the end of a successful `set_interest_rate` call.
 pub const TOPIC_INTEREST_RATE_SET: &str = "interest_rate_set";
@@ -114,6 +118,10 @@ pub const TOPIC_INTEREST_WITHDRAW: &str = "interest_withdraw";
 /// Emitted at the end of a successful `interest_claim` call, recording the
 /// interest credited to principal.
 pub const TOPIC_INTEREST_CLAIMED: &str = "interest_claimed";
+
+// --- recurring deposits (#615) --------------------------------------------
+/// Emitted after a recurring deposit is successfully executed.
+pub const TOPIC_RECURRING_DEPOSIT_EXECUTED: &str = "RecurringDepositExecuted";
 
 // --- emergency pause (#428) -----------------------------------------------
 /// Emitted when the contract enters or exits emergency mode.
@@ -136,3 +144,35 @@ pub const TOPIC_INSURANCE_FUNDED: &str = "insurance_funded";
 pub const TOPIC_INSURANCE_CLAIM_APPROVED: &str = "insurance_claim_approved";
 /// Emitted when an insurance claim is redeemed.
 pub const TOPIC_INSURANCE_CLAIM_REDEEMED: &str = "insurance_claim_redeemed";
+
+// --- rewards -----------------------------------------------------------
+/// Emitted when a reward pool is funded.
+pub const TOPIC_REWARD_FUNDED: &str = "reward_funded";
+/// Emitted when reward configuration is set.
+pub const TOPIC_REWARD_CONFIG_SET: &str = "reward_config_set";
+/// Emitted when a reward accrues to a user.
+pub const TOPIC_REWARD_ACCRUED: &str = "reward_accrued";
+/// Emitted when a user claims accrued rewards.
+pub const TOPIC_REWARD_CLAIMED: &str = "reward_claimed";
+/// Emitted when a user's savings streak is updated.
+pub const TOPIC_STREAK_UPDATED: &str = "streak_updated";
+
+// --- timelock ----------------------------------------------------------
+/// Emitted when an admin action is queued behind the timelock.
+pub const TOPIC_TIMELOCK_QUEUED: &str = "timelock_queued";
+/// Emitted when a queued action is executed.
+pub const TOPIC_TIMELOCK_EXECUTED: &str = "timelock_executed";
+/// Emitted when a queued action is cancelled.
+pub const TOPIC_TIMELOCK_CANCELLED: &str = "timelock_cancelled";
+
+// --- delegation --------------------------------------------------------
+/// Emitted when an owner grants a delegation.
+pub const TOPIC_DELEGATION_GRANTED: &str = "delegation_granted";
+/// Emitted when a delegation's permission level or expiry is updated.
+pub const TOPIC_DELEGATION_UPDATED: &str = "delegation_updated";
+/// Emitted when a delegation is revoked.
+pub const TOPIC_DELEGATION_REVOKED: &str = "delegation_revoked";
+
+// --- roundup -----------------------------------------------------------
+/// Emitted when an external transaction's round-up difference is deposited.
+pub const TOPIC_ROUNDUP_DEPOSIT: &str = "roundup_deposit";

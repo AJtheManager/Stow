@@ -219,6 +219,14 @@ class EnvironmentVariables {
   @IsString()
   AUDIT_LOG_ENCRYPTION_KEY?: string;
 
+  /**
+   * 32-byte key (64 hex characters) that encrypts stored TOTP secrets. Required
+   * once two-factor authentication is used; setup fails without it.
+   */
+  @IsOptional()
+  @IsString()
+  TWO_FACTOR_ENCRYPTION_KEY?: string;
+
   /** Days to keep audit logs before they are purged. Defaults to 365. */
   @IsOptional()
   @IsString()

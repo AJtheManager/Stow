@@ -1,4 +1,4 @@
-﻿#![no_std]
+#![no_std]
 //! # Stow Savings Vault
 //!
 //! Non-custodial savings on Soroban. Funds move only under contract rules.
@@ -16,6 +16,7 @@
 //! and a `TODO(issue)` describing the work. Each stub is one contributor issue.
 
 mod admin;
+mod challenge;
 mod delegation;
 mod error;
 mod events;
@@ -27,9 +28,14 @@ mod group_split;
 mod insurance;
 mod interest;
 mod limits;
-mod challenge;
 mod locked;
 pub mod rewards;
+mod roundup;
+mod challenge;
+mod multisig;
+mod locked;
+pub mod rewards;
+mod recurring;
 mod storage;
 mod timelock;
 mod types;
@@ -47,8 +53,13 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String};
 
 use crate::error::Error;
 use crate::types::{
-    CompoundFrequency, FlexibleAccount, Goal, Group, GroupLimits, InsuranceClaimRecord, InterestAccount,
-    LockedPlan, Proposal, UpgradeProposal,
+    Challenge, ChallengeKind, CompoundFrequency, Delegation, FlexibleAccount, Goal, Group,
+    GroupLimits, InsuranceClaimRecord, InterestAccount, LockedPlan, PermissionLevel, Proposal,
+    QueuedAction, RewardState, RewardsConfig, RoundupConfig, RoundupLevel, TimelockAction,
+    UpgradeProposal,
+    CompoundFrequency, FlexibleAccount, Goal, Group, GroupLimits, InsuranceClaimRecord,
+    GroupWithdrawalRequest, InterestAccount, LockedPlan, Proposal, RecurringDeposit,
+    RecurringFrequency, UpgradeProposal,
 };
 
 #[contract]
@@ -166,6 +177,34 @@ impl SavingsVault {
 
     pub fn get_account(env: Env, owner: Address) -> Result<FlexibleAccount, Error> {
         flexible::get_account(&env, owner)
+    }
+
+    // --- recurring deposits (#615) ----------------------------------------
+    /// Set up a recurring wallet deposit. The owner must authorize the call
+    /// and approve the vault as a SEP-41 spender before execution.
+    pub fn setup_recurring(
+        env: Env,
+        owner: Address,
+        amount: i128,
+        frequency: RecurringFrequency,
+    ) -> Result<u64, Error> {
+        recurring::setup(&env, owner, amount, frequency)
+    }
+
+    /// Execute a due recurring deposit. Permissionless; the owner's existing
+    /// SEP-41 allowance funds the transfer.
+    pub fn execute_recurring(env: Env, owner: Address) -> Result<(), Error> {
+        recurring::execute(&env, owner)
+    }
+
+    /// Cancel the owner's recurring deposit schedule.
+    pub fn cancel_recurring(env: Env, owner: Address) -> Result<(), Error> {
+        recurring::cancel(&env, owner)
+    }
+
+    /// Read a recurring deposit schedule, if configured.
+    pub fn recurring_deposit(env: Env, owner: Address) -> Option<RecurringDeposit> {
+        recurring::get(&env, owner)
     }
 
     // --- locked ------------------------------------------------------------
@@ -309,6 +348,50 @@ impl SavingsVault {
 
     pub fn group(env: Env, group_id: u64) -> Result<Group, Error> {
         group::get_group(&env, group_id)
+    }
+
+    // --- group multi-signature withdrawals (#616) -------------------------
+    pub fn request_withdrawal(
+        env: Env,
+        requester: Address,
+        group_id: u64,
+        recipient: Address,
+        amount: i128,
+        threshold: u32,
+        expires_at: u64,
+    ) -> Result<u64, Error> {
+        multisig::request_withdrawal(
+            &env,
+            requester,
+            group_id,
+            recipient,
+            amount,
+            threshold,
+            expires_at,
+        )
+    }
+
+    pub fn approve_withdrawal(
+        env: Env,
+        approver: Address,
+        request_id: u64,
+    ) -> Result<(), Error> {
+        multisig::approve_withdrawal(&env, approver, request_id)
+    }
+
+    pub fn reject_withdrawal(
+        env: Env,
+        rejector: Address,
+        request_id: u64,
+    ) -> Result<(), Error> {
+        multisig::reject_withdrawal(&env, rejector, request_id)
+    }
+
+    pub fn withdrawal_request(
+        env: Env,
+        request_id: u64,
+    ) -> Result<GroupWithdrawalRequest, Error> {
+        multisig::get_withdrawal_request(&env, request_id)
     }
 
     // --- group split -------------------------------------------------------
@@ -461,7 +544,11 @@ impl SavingsVault {
     }
 
     /// Propose an upgrade with a timelock delay.
-    pub fn propose_upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+    pub fn propose_upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), Error> {
         admin::propose_upgrade(&env, caller, new_wasm_hash)
     }
 
@@ -536,5 +623,197 @@ impl SavingsVault {
     pub fn insurance_claim(env: Env, claimant: Address) -> Result<InsuranceClaimRecord, Error> {
         insurance::get_claim(&env, claimant)
     }
-}
 
+    // --- flexible fee structure (issue #430) ---------------------------------
+    pub fn fee_bps(env: Env) -> u32 {
+        fees::fee_bps(&env)
+    }
+
+    pub fn set_fee_bps(env: Env, bps: u32) -> Result<(), Error> {
+        fees::set_fee_bps(&env, bps)
+    }
+
+    pub fn fee_recipient(env: Env) -> Result<Address, Error> {
+        fees::fee_recipient(&env)
+    }
+
+    pub fn set_fee_recipient(env: Env, recipient: Address) -> Result<(), Error> {
+        fees::set_fee_recipient(&env, recipient)
+    }
+
+    // --- rewards (issue #440) ------------------------------------------------
+    pub fn reward_set_config(
+        env: Env,
+        caller: Address,
+        config: RewardsConfig,
+    ) -> Result<(), Error> {
+        rewards::set_config(&env, caller, config)
+    }
+
+    pub fn reward_config(env: Env) -> RewardsConfig {
+        rewards::get_config(&env)
+    }
+
+    pub fn reward_fund(env: Env, caller: Address, amount: i128) -> Result<(), Error> {
+        rewards::fund_pool(&env, caller, amount)
+    }
+
+    pub fn reward_pool_balance(env: Env) -> i128 {
+        rewards::pool_balance(&env)
+    }
+
+    pub fn reward_accrue(env: Env, owner: Address) -> Result<i128, Error> {
+        rewards::accrue(&env, owner)
+    }
+
+    pub fn reward_claim(env: Env, owner: Address) -> Result<i128, Error> {
+        rewards::claim(&env, owner)
+    }
+
+    pub fn reward_ping(env: Env, owner: Address) -> Result<(), Error> {
+        rewards::ping(&env, owner)
+    }
+
+    pub fn reward_state(env: Env, owner: Address) -> Option<RewardState> {
+        rewards::get_reward_state(&env, owner)
+    }
+
+    pub fn reward_accrued_preview(env: Env, owner: Address) -> Result<i128, Error> {
+        rewards::accrued_preview(&env, owner)
+    }
+
+    // --- delegation (issue #437) ---------------------------------------------
+    pub fn delegate_savings(
+        env: Env,
+        owner: Address,
+        delegate: Address,
+        level: PermissionLevel,
+        expires_at: Option<u64>,
+    ) -> Result<(), Error> {
+        delegation::delegate_savings(&env, owner, delegate, level, expires_at)
+    }
+
+    pub fn update_delegation(
+        env: Env,
+        owner: Address,
+        delegate: Address,
+        level: PermissionLevel,
+        expires_at: Option<u64>,
+    ) -> Result<(), Error> {
+        delegation::update_delegation(&env, owner, delegate, level, expires_at)
+    }
+
+    pub fn revoke_delegation(env: Env, owner: Address, delegate: Address) -> Result<(), Error> {
+        delegation::revoke_delegation(&env, owner, delegate)
+    }
+
+    pub fn get_delegation(
+        env: Env,
+        owner: Address,
+        delegate: Address,
+    ) -> Result<Delegation, Error> {
+        delegation::get_delegation(&env, owner, delegate)
+    }
+
+    pub fn delegated_deposit(
+        env: Env,
+        delegate: Address,
+        owner: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        delegation::delegated_deposit(&env, delegate, owner, amount)
+    }
+
+    pub fn delegated_withdraw(
+        env: Env,
+        delegate: Address,
+        owner: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        delegation::delegated_withdraw(&env, delegate, owner, amount)
+    }
+
+    // --- timelock (issue #438) -----------------------------------------------
+    pub fn queue_action(env: Env, action: TimelockAction) -> Result<u64, Error> {
+        timelock::queue_action(&env, action)
+    }
+
+    pub fn execute_action(env: Env, id: u64) -> Result<(), Error> {
+        timelock::execute_action(&env, id)
+    }
+
+    pub fn cancel_action(env: Env, id: u64) -> Result<(), Error> {
+        timelock::cancel_action(&env, id)
+    }
+
+    pub fn get_queued_action(env: Env, id: u64) -> Result<QueuedAction, Error> {
+        timelock::get_queued_action(&env, id)
+    }
+
+    pub fn timelock_delay(env: Env) -> u64 {
+        timelock::get_delay(&env)
+    }
+
+    // --- savings challenges (issues #442, #623) ------------------------------
+    pub fn create_challenge(
+        env: Env,
+        creator: Address,
+        kind: ChallengeKind,
+        target_amount: i128,
+        entry_fee: i128,
+        deadline: u64,
+        min_participants: u32,
+    ) -> Result<u64, Error> {
+        challenge::create(
+            &env,
+            creator,
+            kind,
+            target_amount,
+            entry_fee,
+            deadline,
+            min_participants,
+        )
+    }
+
+    pub fn join_challenge(env: Env, participant: Address, challenge_id: u64) -> Result<(), Error> {
+        challenge::join(&env, participant, challenge_id)
+    }
+
+    pub fn save_challenge(
+        env: Env,
+        participant: Address,
+        challenge_id: u64,
+        amount: i128,
+    ) -> Result<(), Error> {
+        challenge::save(&env, participant, challenge_id, amount)
+    }
+
+    pub fn settle_challenge(
+        env: Env,
+        participant: Address,
+        challenge_id: u64,
+    ) -> Result<i128, Error> {
+        challenge::settle(&env, participant, challenge_id)
+    }
+
+    pub fn get_challenge(env: Env, challenge_id: u64) -> Result<Challenge, Error> {
+        challenge::get_challenge(&env, challenge_id)
+    }
+
+    // --- savings round-ups (issue #622) --------------------------------------
+    pub fn enable_roundup(env: Env, owner: Address, level: RoundupLevel) -> Result<(), Error> {
+        roundup::enable(&env, owner, level)
+    }
+
+    pub fn roundup_config(env: Env, owner: Address) -> Result<RoundupConfig, Error> {
+        roundup::get_config(&env, owner)
+    }
+
+    pub fn record_roundup_transaction(
+        env: Env,
+        owner: Address,
+        amount: i128,
+    ) -> Result<i128, Error> {
+        roundup::record_transaction(&env, owner, amount)
+    }
+}
