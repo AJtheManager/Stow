@@ -5,7 +5,7 @@ use soroban_sdk::{Address, BytesN, Env};
 use crate::error::Error;
 use crate::events::{
     EVENT_SCHEMA_VERSION, TOPIC_ADMIN_SET, TOPIC_EMERGENCY_MODE_SET, TOPIC_INIT, TOPIC_PAUSED,
-    TOPIC_UNPAUSED,
+    TOPIC_UNPAUSED, TOPIC_UPGRADED, TOPIC_UPGRADE_CANCELLED, TOPIC_UPGRADE_PROPOSED,
 };
 use crate::storage::{self, extend_instance_ttl};
 use crate::types::{DataKey, UpgradeProposal};
@@ -31,9 +31,13 @@ pub fn initialize(env: &Env, admin: Address, token: Address) -> Result<(), Error
     env.storage().instance().set(&DataKey::NextGoalId, &0u64);
     env.storage().instance().set(&DataKey::NextGroupId, &0u64);
     env.storage().instance().set(&DataKey::Paused, &false);
-    env.storage().instance().set(&DataKey::EmergencyMode, &false);
+    env.storage()
+        .instance()
+        .set(&DataKey::EmergencyMode, &false);
     env.storage().instance().set(&DataKey::Version, &1u32);
-    env.storage().instance().set(&DataKey::InsuranceFundBalance, &0i128);
+    env.storage()
+        .instance()
+        .set(&DataKey::InsuranceFundBalance, &0i128);
 
     env.events().publish(
         (TOPIC_INIT,),
@@ -333,7 +337,9 @@ pub fn set_emergency_mode(env: &Env, caller: Address, active: bool) -> Result<()
         return Err(Error::Unauthorized);
     }
 
-    env.storage().instance().set(&DataKey::EmergencyMode, &active);
+    env.storage()
+        .instance()
+        .set(&DataKey::EmergencyMode, &active);
 
     env.events().publish(
         (TOPIC_EMERGENCY_MODE_SET,),
@@ -368,28 +374,98 @@ pub fn version(env: &Env) -> u32 {
 
 /// The configured upgrade delay in seconds. Defaults to 0 (no delay).
 pub fn upgrade_delay(env: &Env) -> u64 {
-    crate::upgrade::upgrade_delay(env)
+    env.storage()
+        .instance()
+        .get(&DataKey::UpgradeDelay)
+        .unwrap_or(0)
 }
 
 /// Set the minimum delay before a proposed upgrade can be executed.
 /// Admin-only.
 pub fn set_upgrade_delay(env: &Env, caller: Address, seconds: u64) -> Result<(), Error> {
-    crate::upgrade::set_upgrade_delay(env, caller, seconds)
+    extend_instance_ttl(env);
+
+    let current_admin = admin(env)?;
+    caller.require_auth();
+    if caller != current_admin {
+        return Err(Error::Unauthorized);
+    }
+
+    env.storage()
+        .instance()
+        .set(&DataKey::UpgradeDelay, &seconds);
+
+    Ok(())
 }
 
 /// Propose an upgrade. Admin-only. The upgrade cannot execute until
 /// `upgrade_delay` seconds have elapsed.
-pub fn propose_upgrade(
-    env: &Env,
-    caller: Address,
-    new_wasm_hash: BytesN<32>,
-) -> Result<(), Error> {
-    crate::upgrade::propose_upgrade(env, caller, new_wasm_hash)
+pub fn propose_upgrade(env: &Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+    extend_instance_ttl(env);
+
+    let current_admin = admin(env)?;
+    caller.require_auth();
+    if caller != current_admin {
+        return Err(Error::Unauthorized);
+    }
+
+    if env.storage().instance().has(&DataKey::PendingUpgrade) {
+        return Err(Error::ConflictingState);
+    }
+
+    let now = env.ledger().timestamp();
+    let delay = upgrade_delay(env);
+    let proposal = UpgradeProposal {
+        new_wasm_hash: new_wasm_hash.clone(),
+        proposed_by: caller.clone(),
+        proposed_at: now,
+        execute_after: now + delay,
+    };
+
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingUpgrade, &proposal);
+
+    env.events().publish(
+        (TOPIC_UPGRADE_PROPOSED,),
+        (caller, new_wasm_hash, now, now + delay),
+    );
+
+    Ok(())
 }
 
 /// Execute a pending upgrade after its timelock has elapsed. Admin-only.
 pub fn execute_upgrade(env: &Env, caller: Address) -> Result<(), Error> {
-    crate::upgrade::execute_upgrade(env, caller)
+    extend_instance_ttl(env);
+
+    let current_admin = admin(env)?;
+    caller.require_auth();
+    if caller != current_admin {
+        return Err(Error::Unauthorized);
+    }
+
+    let proposal: UpgradeProposal = env
+        .storage()
+        .instance()
+        .get(&DataKey::PendingUpgrade)
+        .ok_or(Error::NotFound)?;
+
+    let now = env.ledger().timestamp();
+    if now < proposal.execute_after {
+        return Err(Error::TimeWindowNotOpen);
+    }
+
+    env.deployer()
+        .update_current_contract_wasm(proposal.new_wasm_hash.clone());
+
+    let ver = version(env) + 1;
+    env.storage().instance().set(&DataKey::Version, &ver);
+    env.storage().instance().remove(&DataKey::PendingUpgrade);
+
+    env.events()
+        .publish((TOPIC_UPGRADED,), (caller, proposal.new_wasm_hash, now));
+
+    Ok(())
 }
 
 /// Cancel a pending upgrade. Admin-only.
