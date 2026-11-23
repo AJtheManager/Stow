@@ -24,6 +24,12 @@ use crate::types::{CompoundFrequency, PermissionLevel};
 use crate::{SavingsVault, SavingsVaultClient};
 use std::string::ToString;
 
+#[path = "test/recurring_test.rs"]
+mod recurring_test;
+
+#[path = "test/multisig_test.rs"]
+mod multisig_test;
+
 #[contract]
 struct ReentrantToken;
 
@@ -98,7 +104,13 @@ fn setup(env: &Env) -> SavingsVaultClient {
 ///
 /// Returns `(client, admin, token_address)`.
 fn setup_with_token(env: &Env) -> (SavingsVaultClient, Address, Address) {
-    let client = setup(env);
+    let (client, admin, token_address, _) = setup_with_token_and_id(env);
+    (client, admin, token_address)
+}
+
+fn setup_with_token_and_id(env: &Env) -> (SavingsVaultClient, Address, Address, Address) {
+    let contract_id = env.register(SavingsVault, ());
+    let client = SavingsVaultClient::new(env, &contract_id);
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
 
@@ -108,7 +120,7 @@ fn setup_with_token(env: &Env) -> (SavingsVaultClient, Address, Address) {
 
     client.initialize(&admin, &token_address);
 
-    (client, admin, token_address)
+    (client, admin, token_address, contract_id)
 }
 
 /// One topic of an emitted event, decodable with the `as_*` helpers below.

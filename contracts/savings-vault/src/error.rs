@@ -133,4 +133,7 @@ pub enum Error {
     TimelockDelayTooShort = 134,
     /// Timelock delay exceeds the maximum allowed.
     TimelockDelayTooLong = 135,
+    // --- Group withdrawal approvals ---
+    /// A group withdrawal request was already rejected or executed.
+    WithdrawalRequestClosed = 123,
 }
