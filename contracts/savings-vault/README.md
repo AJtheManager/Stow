@@ -370,6 +370,52 @@ Monthly intervals are fixed at 30 days.
 - **Auth:** none (read-only).
 - **Events:** none.
 
+### Conditional withdrawals
+
+An owner registers one pending rule: withdraw `amount` from their flexible
+account once a condition holds. Execution is permissionless (so it can be
+automated) but always pays the owner. A rule is one-shot and can be
+cancelled at any time.
+
+`WithdrawalCondition` is one of:
+- `PriceAbove(asset: Address, threshold: i128)` — the configured oracle's
+  `price(asset)` must be strictly greater than `threshold`.
+- `AfterDate(timestamp: u64)` — the ledger timestamp must be `>= timestamp`.
+- `BalanceAbove(amount: i128)` — the flexible balance must be strictly
+  greater than `amount`.
+
+#### `set_price_oracle(caller: Address, oracle: Address) -> Result<(), Error>`
+- **Auth:** admin. The oracle must expose `price(asset: Address) -> i128`.
+- **Errors:** `NotInitialized`, `Unauthorized`, `Paused`.
+- **Events:** [`price_oracle_set`](#price_oracle_set).
+
+#### `price_oracle() -> Option<Address>`
+- **Auth:** none (read-only).
+
+#### `set_withdrawal_condition(owner: Address, condition: WithdrawalCondition, amount: i128) -> Result<(), Error>`
+- **Auth:** `owner`. Replaces any existing rule.
+- **Errors:** `InvalidAmount`, `InvalidCondition` (non-positive price
+  threshold, negative balance threshold, or a date not in the future),
+  `OracleUnavailable` for a price condition with no oracle configured,
+  `NotFound` if the owner has no flexible account, `Paused`.
+- **Events:** [`withdrawal_condition_set`](#withdrawal_condition_set).
+
+#### `cancel_withdrawal_condition(owner: Address) -> Result<(), Error>`
+- **Auth:** `owner`.
+- **Errors:** `NotFound` if no rule is set.
+- **Events:** [`withdrawal_condition_cancelled`](#withdrawal_condition_cancelled).
+
+#### `withdrawal_condition(owner: Address) -> Option<ConditionalWithdrawalRule>`
+- **Auth:** none (read-only).
+
+#### `execute_conditional_withdrawal(owner: Address) -> Result<i128, Error>`
+- **Auth:** none; permissionless. Funds are always paid to `owner`.
+- **Errors:** `NotFound` (no rule or account), `ConditionNotMet`,
+  `OracleUnavailable` if the oracle is missing or its call fails,
+  `InsufficientBalance`, `Paused`.
+- **Returns:** the amount withdrawn.
+- **Events:** [`ConditionalWithdrawal`](#conditionalwithdrawal).
+
 ### Locked savings — deterministic on-chain time locks
 
 #### `locked_create(owner: Address, amount: i128, unlock_at: u64) -> Result<u64, Error>`
@@ -435,6 +481,43 @@ stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
 stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
   -- locked_plan --plan_id 1
 ```
+
+### Locked rollover — automatic renewal at maturity
+
+An owner opts a locked plan into auto-rollover before it matures. Once
+`now >= unlock_at`, anyone (typically a keeper) can call `execute_rollover`:
+the balance plus interest moves into a brand-new locked plan, the original
+plan is closed with a zero balance, and the rollover setting carries forward
+to the new plan. Interest is simple interest at the admin's
+`interest_rate_bps` pro-rated over the plan's term, paid from the
+reward pool and capped at its balance. No tokens leave the vault.
+
+#### `enable_auto_rollover(owner: Address, plan_id: u64, lock_period: u64) -> Result<(), Error>`
+- **Auth:** `owner`.
+- `lock_period` is the new plan's lock length in seconds; `0` reuses the
+  original term (`unlock_at - created_at`). Calling again updates the terms.
+- **Errors:** `NotFound`, `Unauthorized`, `InsufficientBalance` for an empty
+  plan, `OperationExpired` once the plan has matured, `Paused`.
+- **Events:** [`rollover_enabled`](#rollover_enabled).
+
+#### `disable_auto_rollover(owner: Address, plan_id: u64) -> Result<(), Error>`
+- **Auth:** `owner`. Opt-out is only allowed before maturity.
+- **Errors:** `NotFound` (plan or rollover setting), `Unauthorized`,
+  `OperationExpired` at or after `unlock_at`, `Paused`.
+- **Events:** [`rollover_disabled`](#rollover_disabled).
+
+#### `execute_rollover(plan_id: u64) -> Result<u64, Error>`
+- **Auth:** none; permissionless. The new plan always belongs to the
+  original owner.
+- **Errors:** `NotFound` if the plan does not exist or rollover is not
+  enabled, `StillLocked` before `unlock_at`, `InsufficientBalance` if the
+  plan was already emptied, `Overflow`, `Paused`.
+- **Returns:** the new plan id.
+- **Events:** [`VaultRolledOver`](#vaultrolledover).
+
+#### `rollover_config(plan_id: u64) -> Option<RolloverConfig>`
+- **Auth:** none (read-only).
+- **Events:** none.
 
 ### Goal savings — save toward a target with milestones
 
@@ -1278,3 +1361,76 @@ Topics: `(Symbol("RecurringDepositExecuted"), owner: Address)`
 | `frequency` | `RecurringFrequency` | Schedule frequency. |
 | `next_execution` | `u64` | Timestamp for the next eligible execution. |
 | `timestamp` | `u64` | Ledger timestamp of this execution. |
+
+#### `rollover_enabled`
+Topics: `(Symbol("rollover_enabled"), owner: Address, plan_id: u64)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `plan_id` | `u64` | Locked plan opted into rollover. |
+| `owner` | `Address` | Plan owner. |
+| `lock_period` | `u64` | New plan lock length in seconds (`0` = same term). |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
+#### `rollover_disabled`
+Topics: `(Symbol("rollover_disabled"), owner: Address, plan_id: u64)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `plan_id` | `u64` | Locked plan opted out of rollover. |
+| `owner` | `Address` | Plan owner. |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
+#### `VaultRolledOver`
+Topics: `(Symbol("VaultRolledOver"), owner: Address, old_plan_id: u64)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `old_plan_id` | `u64` | Matured plan, now closed with a zero balance. |
+| `new_plan_id` | `u64` | Newly created locked plan. |
+| `principal` | `i128` | Balance moved from the old plan. |
+| `interest` | `i128` | Interest credited from the reward pool. |
+| `new_balance` | `i128` | Opening balance of the new plan. |
+| `new_unlock_at` | `u64` | Unlock time of the new plan. |
+| `timestamp` | `u64` | Ledger timestamp of the rollover. |
+
+#### `price_oracle_set`
+Topics: `(Symbol("price_oracle_set"),)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `caller` | `Address` | Admin that set the oracle. |
+| `oracle` | `Address` | Oracle contract address. |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
+#### `withdrawal_condition_set`
+Topics: `(Symbol("withdrawal_condition_set"), owner: Address)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `owner` | `Address` | Flexible account owner. |
+| `condition` | `WithdrawalCondition` | The condition gating the withdrawal. |
+| `amount` | `i128` | Amount to withdraw once the condition holds. |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
+#### `withdrawal_condition_cancelled`
+Topics: `(Symbol("withdrawal_condition_cancelled"), owner: Address)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `owner` | `Address` | Flexible account owner. |
+| `condition` | `WithdrawalCondition` | The cancelled condition. |
+| `amount` | `i128` | The cancelled amount. |
+| `timestamp` | `u64` | Ledger timestamp of the call. |
+
+#### `ConditionalWithdrawal`
+Topics: `(Symbol("ConditionalWithdrawal"), owner: Address)`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `owner` | `Address` | Owner paid by the withdrawal. |
+| `amount` | `i128` | Amount withdrawn. |
+| `condition` | `WithdrawalCondition` | The condition that was met. |
+| `observed` | `i128` | Value that satisfied it: oracle price, ledger timestamp, or balance. |
+| `new_balance` | `i128` | Flexible balance after the withdrawal. |
+| `timestamp` | `u64` | Ledger timestamp of the withdrawal. |

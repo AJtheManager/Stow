@@ -30,6 +30,12 @@ mod recurring_test;
 #[path = "test/multisig_test.rs"]
 mod multisig_test;
 
+#[path = "test/rollover_test.rs"]
+mod rollover_test;
+
+#[path = "test/conditional_test.rs"]
+mod conditional_test;
+
 #[contract]
 struct ReentrantToken;
 
