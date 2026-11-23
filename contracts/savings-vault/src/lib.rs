@@ -32,6 +32,8 @@ mod insurance;
 mod interest;
 mod limits;
 mod locked;
+pub mod rewards;
+mod roundup;
 mod multisig;
 mod recurring;
 pub mod rewards;
@@ -54,11 +56,10 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String};
 
 use crate::error::Error;
 use crate::types::{
-    Challenge, ChallengeKind, CompoundFrequency, ConditionalWithdrawalRule, Delegation,
-    FlexibleAccount, Goal, Group, GroupLimits, GroupWithdrawalRequest, InsuranceClaimRecord,
-    InterestAccount, LockedPlan, PermissionLevel, Proposal, QueuedAction, RecurringDeposit,
-    RecurringFrequency, RewardState, RewardsConfig, RolloverConfig, RoundupConfig, RoundupLevel,
-    TimelockAction, UpgradeProposal, WithdrawalCondition,
+    Challenge, ChallengeKind, CompoundFrequency, Delegation, FlexibleAccount, Goal, Group,
+    GroupLimits, GroupWithdrawalRequest, InsuranceClaimRecord, InterestAccount, LockedPlan,
+    PermissionLevel, Proposal, QueuedAction, RecurringDeposit, RecurringFrequency, RewardState,
+    RewardsConfig, RoundupConfig, RoundupLevel, TimelockAction, UpgradeProposal,
 };
 
 #[contract]
@@ -282,6 +283,18 @@ impl SavingsVault {
         amount: i128,
     ) -> Result<(), Error> {
         locked::early_withdraw(&env, owner, plan_id, amount)
+    }
+
+    /// Liquidate `liquidation_bps` basis points of a still-locked plan's
+    /// balance, paying the early-withdrawal penalty on that slice only. See
+    /// `locked::partial_liquidate`.
+    pub fn partial_liquidate(
+        env: Env,
+        owner: Address,
+        plan_id: u64,
+        liquidation_bps: u32,
+    ) -> Result<i128, Error> {
+        locked::partial_liquidate(&env, owner, plan_id, liquidation_bps)
     }
 
     pub fn locked_plan(env: Env, plan_id: u64) -> Result<LockedPlan, Error> {

@@ -47,6 +47,10 @@ pub const TOPIC_LOCKED_WITHDRAW: &str = "locked_withdraw";
 /// penalized withdrawal before `unlock_at`).
 pub const TOPIC_LOCKED_EARLY_WITHDRAW: &str = "locked_early_withdraw";
 
+/// Emitted at the end of a successful `partial_liquidate` call. Data is
+/// `(plan_id, owner, liquidated, penalty, remaining_balance, timestamp)`.
+pub const TOPIC_PARTIAL_LIQUIDATION: &str = "PartialLiquidation";
+
 // --- goal ------------------------------------------------------------------
 /// Emitted at the end of a successful `goal_create` call.
 pub const TOPIC_GOAL_CREATED: &str = "goal_created";

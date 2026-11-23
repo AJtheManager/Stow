@@ -6,7 +6,7 @@ use crate::admin;
 use crate::error::Error;
 use crate::events::{
     TOPIC_EMERGENCY_WITHDRAW, TOPIC_LOCKED_CREATED, TOPIC_LOCKED_EARLY_WITHDRAW,
-    TOPIC_LOCKED_TOP_UP, TOPIC_LOCKED_WITHDRAW,
+    TOPIC_LOCKED_TOP_UP, TOPIC_LOCKED_WITHDRAW, TOPIC_PARTIAL_LIQUIDATION,
 };
 use crate::storage::{self, extend_instance_ttl};
 use crate::types::{DataKey, LockedPlan};
@@ -256,6 +256,63 @@ pub fn early_withdraw(env: &Env, owner: Address, plan_id: u64, amount: i128) -> 
     );
 
     Ok(())
+}
+
+/// Liquidate a percentage of a locked plan's current balance before
+/// `unlock_at`. `liquidation_bps` is in basis points of the balance
+/// (`5_000` = 50%).
+///
+/// The liquidated amount is `balance * liquidation_bps / 10_000`, floored.
+/// It is paid out through [`early_withdraw`], so the same time window and
+/// penalty rules apply, and the penalty is charged on the liquidated portion
+/// only. The remaining balance stays in the plan, so repeated calls can
+/// liquidate further slices.
+///
+/// Returns the amount liquidated (before penalty).
+///
+/// Errors: `InvalidParameters` if `liquidation_bps` is `0` or above `10_000`,
+/// `Unauthorized` if `owner` does not own `plan_id`, `InvalidAmount` if the
+/// computed slice is zero, plus any error from [`early_withdraw`].
+pub fn partial_liquidate(
+    env: &Env,
+    owner: Address,
+    plan_id: u64,
+    liquidation_bps: u32,
+) -> Result<i128, Error> {
+    if liquidation_bps == 0 || liquidation_bps > 10_000 {
+        return Err(Error::InvalidParameters);
+    }
+
+    let plan: LockedPlan = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Locked(plan_id))
+        .ok_or(Error::NotFound)?;
+    if plan.owner != owner {
+        return Err(Error::Unauthorized);
+    }
+
+    let amount = plan
+        .balance
+        .checked_mul(liquidation_bps as i128)
+        .ok_or(Error::Overflow)?
+        / 10_000;
+    if amount <= 0 {
+        return Err(Error::InvalidAmount);
+    }
+
+    early_withdraw(env, owner.clone(), plan_id, amount)?;
+
+    let bps = admin::early_withdraw_penalty_bps(env);
+    let penalty = amount.checked_mul(bps as i128).ok_or(Error::Overflow)? / 10_000;
+    let remaining = plan.balance.checked_sub(amount).ok_or(Error::Overflow)?;
+    let now = env.ledger().timestamp();
+    env.events().publish(
+        (TOPIC_PARTIAL_LIQUIDATION, owner.clone(), plan_id),
+        (plan_id, owner, amount, penalty, remaining, now),
+    );
+
+    Ok(amount)
 }
 
 /// Emergency withdrawal from a locked plan. Only available when the contract
