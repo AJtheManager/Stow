@@ -284,6 +284,10 @@ pub fn withdraw(env: &Env, owner: Address, amount: i128) -> Result<(), Error> {
         .checked_sub(amount)
         .ok_or(Error::Overflow)?;
 
+    // Collateral lock: an interest-bearing vault backing a loan cannot be
+    // withdrawn below the minimum locked balance for outstanding debt.
+    crate::collateral::check_withdrawal(env, &owner, new_principal)?;
+
     storage::transfer_out(env, &owner, amount)?;
 
     // Update the tiered rate based on the post-withdrawal balance.

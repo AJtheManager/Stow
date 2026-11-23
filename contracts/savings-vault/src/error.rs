@@ -19,6 +19,7 @@ use soroban_sdk::contracterror;
 /// - 110-119: Storage & State
 /// - 120-129: Rewards
 /// - 130-139: Timelock
+/// - 140-149: Automation (rollover, conditional withdrawals)
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -146,4 +147,13 @@ pub enum Error {
     // --- Group withdrawal approvals ---
     /// A group withdrawal request was already rejected or executed.
     WithdrawalRequestClosed = 123,
+
+    // --- Automation (140-149) ---
+    /// A conditional withdrawal's condition has not been met yet.
+    ConditionNotMet = 140,
+    /// A withdrawal condition is malformed (e.g. non-positive threshold or a
+    /// date that is already in the past).
+    InvalidCondition = 141,
+    /// No price oracle is configured, or the oracle call failed.
+    OracleUnavailable = 142,
 }

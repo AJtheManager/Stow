@@ -1,4 +1,5 @@
 //! Savings delegation — authorize a delegate to manage savings on the
+#![allow(dead_code)]
 //! owner's behalf.
 //!
 //! An owner grants a [`Delegation`] to a delegate address with a
