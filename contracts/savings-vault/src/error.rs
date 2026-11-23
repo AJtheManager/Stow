@@ -18,6 +18,7 @@ use soroban_sdk::contracterror;
 /// - 90-99: Time-based operations
 /// - 110-119: Storage & State
 /// - 120-129: Rewards
+/// - 130-139: Timelock
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -41,6 +42,10 @@ pub enum Error {
     InsufficientBalance = 22,
     /// Invalid parameter combination provided.
     InvalidParameters = 25,
+    /// Address is malformed or not allowed for this operation.
+    InvalidAddress = 23,
+    /// Operation conflicts with the current state of the record.
+    ConflictingState = 24,
 
     // --- Locked Savings (30-39) ---
     /// Funds are still locked; unlock time has not been reached.
@@ -75,6 +80,8 @@ pub enum Error {
     // --- Arithmetic & Limits (60-69) ---
     /// A monetary computation would have overflowed or underflowed `i128`.
     Overflow = 60,
+    /// A division had a zero divisor.
+    DivisionByZero = 63,
     /// The admin-configured per-account deposit cap would be exceeded.
     DepositCapExceeded = 61,
 
@@ -94,6 +101,8 @@ pub enum Error {
     // --- Time-based Operations (90-99) ---
     /// Operation has expired.
     OperationExpired = 92,
+    /// Timestamp is missing or in the wrong order.
+    InvalidTimestamp = 91,
     /// Time window for operation has not opened yet.
     TimeWindowNotOpen = 93,
 
@@ -111,43 +120,20 @@ pub enum Error {
     /// No reward has accrued yet (nothing to claim).
     NoRewardAccrued = 122,
 
-    // --- State conflicts (130-139) ---
-    /// An operation conflicts with existing state (e.g. duplicate delegation).
-    ConflictingState = 130,
-    /// An address value is invalid for this context (e.g. self-delegation).
-    InvalidAddress = 131,
-    /// A timestamp value is invalid for this context (e.g. expiry in the past).
-    InvalidTimestamp = 132,
-    /// Division by zero in a fee or ratio calculation.
-    DivisionByZero = 133,
-
-    // --- Timelock (140-149) ---
-    /// The timelock action has already been executed.
-    TimelockAlreadyExecuted = 140,
-    /// The timelock action was cancelled.
-    TimelockCancelled = 141,
-    /// The timelock ETA has not yet been reached.
-    TimelockNotReady = 142,
-    /// The timelock grace period has expired; the action can no longer execute.
-    TimelockExpired = 143,
-    /// The requested timelock delay is below the minimum allowed.
-    TimelockDelayTooShort = 144,
-    /// The requested timelock delay is above the maximum allowed.
-    TimelockDelayTooLong = 145,
-
-    // --- Collateral (150-159) ---
-    /// Vault is already enabled as collateral.
-    CollateralAlreadyEnabled = 150,
-    /// Vault is not enabled as collateral.
-    CollateralNotEnabled = 151,
-    /// Borrow would exceed the vault's collateral ratio.
-    CollateralLimitExceeded = 152,
-    /// Position is healthy; liquidation is not permitted.
-    PositionHealthy = 153,
-    /// Withdrawal would leave balance below the required collateral lock.
-    CollateralWithdrawalBlocked = 154,
-    /// Caller is not a registered lender.
-    NotRegisteredLender = 155,
-    /// Vault is already backing another loan.
-    VaultAlreadyBacking = 156,
+    // --- Timelock (130-139) ---
+    /// Queued action ETA has not been reached yet.
+    TimelockNotReady = 130,
+    /// Queued action has passed its grace-period expiry.
+    TimelockExpired = 131,
+    /// Queued action has already been executed.
+    TimelockAlreadyExecuted = 132,
+    /// Queued action has been cancelled.
+    TimelockCancelled = 133,
+    /// Timelock delay is below the minimum allowed.
+    TimelockDelayTooShort = 134,
+    /// Timelock delay exceeds the maximum allowed.
+    TimelockDelayTooLong = 135,
+    // --- Group withdrawal approvals ---
+    /// A group withdrawal request was already rejected or executed.
+    WithdrawalRequestClosed = 123,
 }

@@ -83,6 +83,7 @@ pub fn set_fee_recipient(env: &Env, recipient: Address) -> Result<(), Error> {
 ///
 /// When `fee_bps == 0` the function returns `(0, amount)` without touching
 /// the arithmetic path.
+#[allow(dead_code)] // Not wired to an entrypoint yet (#430 follow-up).
 pub fn calculate_fee(env: &Env, amount: i128) -> Result<(i128, i128), Error> {
     let bps = fee_bps(env);
     if bps == 0 {
@@ -107,6 +108,7 @@ pub fn calculate_fee(env: &Env, amount: i128) -> Result<(i128, i128), Error> {
 ///
 /// When `fee_bps == 0` this is equivalent to a plain `transfer_in` with no
 /// extra token movement.
+#[allow(dead_code)] // Not wired to an entrypoint yet (#430 follow-up).
 pub fn transfer_in_with_fee(env: &Env, from: &Address, amount: i128) -> Result<i128, Error> {
     if amount <= 0 {
         return Err(Error::InvalidAmount);
@@ -133,6 +135,7 @@ pub fn transfer_in_with_fee(env: &Env, from: &Address, amount: i128) -> Result<i
 ///
 /// When `fee_bps == 0` this is equivalent to a plain `transfer_out` with no
 /// extra token movement.
+#[allow(dead_code)] // Not wired to an entrypoint yet (#430 follow-up).
 pub fn transfer_out_with_fee(env: &Env, to: &Address, amount: i128) -> Result<i128, Error> {
     if amount <= 0 {
         return Err(Error::InvalidAmount);
@@ -158,124 +161,113 @@ pub fn transfer_out_with_fee(env: &Env, to: &Address, amount: i128) -> Result<i1
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SavingsVault;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::Env;
 
-    fn setup_env() -> Env {
+    /// Runs `f` inside a registered vault contract so storage access is valid.
+    fn with_contract(f: impl FnOnce(&Env)) {
         let env = Env::default();
         env.mock_all_auths();
-        env
+        let contract_id = env.register(SavingsVault, ());
+        env.as_contract(&contract_id, || f(&env));
+    }
+
+    /// Stores `admin` as the contract admin and clears the transfer guard.
+    fn init_admin(env: &Env, admin: &Address) {
+        env.storage().instance().set(&DataKey::Admin, admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenTransferActive, &false);
     }
 
     #[test]
     fn fee_bps_defaults_to_zero() {
-        let env = setup_env();
-        assert_eq!(fee_bps(&env), 0);
+        with_contract(|env| {
+            assert_eq!(fee_bps(env), 0);
+        });
     }
 
     #[test]
     fn set_fee_bps_stores_value() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-
-        set_fee_bps(&env, 50).unwrap(); // 0.5%
-        assert_eq!(fee_bps(&env), 50);
+        with_contract(|env| {
+            init_admin(env, &Address::generate(env));
+            set_fee_bps(env, 50).unwrap(); // 0.5%
+            assert_eq!(fee_bps(env), 50);
+        });
     }
 
     #[test]
     fn set_fee_bps_rejects_above_1000() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-
-        assert_eq!(set_fee_bps(&env, 1_001), Err(Error::InvalidParameters));
+        with_contract(|env| {
+            init_admin(env, &Address::generate(env));
+            assert_eq!(set_fee_bps(env, 1_001), Err(Error::InvalidParameters));
+        });
     }
 
     #[test]
     fn fee_recipient_defaults_to_admin() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-
-        assert_eq!(fee_recipient(&env).unwrap(), admin);
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            init_admin(env, &admin);
+            assert_eq!(fee_recipient(env).unwrap(), admin);
+        });
     }
 
     #[test]
     fn set_fee_recipient_stores_value() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        let recipient = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-
-        set_fee_recipient(&env, recipient.clone()).unwrap();
-        assert_eq!(fee_recipient(&env).unwrap(), recipient);
+        with_contract(|env| {
+            init_admin(env, &Address::generate(env));
+            let recipient = Address::generate(env);
+            set_fee_recipient(env, recipient.clone()).unwrap();
+            assert_eq!(fee_recipient(env).unwrap(), recipient);
+        });
     }
 
     #[test]
     fn calculate_fee_zero_bps_returns_full_amount() {
-        let env = setup_env();
-        let (fee, net) = calculate_fee(&env, 1_000_000).unwrap();
-        assert_eq!(fee, 0);
-        assert_eq!(net, 1_000_000);
+        with_contract(|env| {
+            let (fee, net) = calculate_fee(env, 1_000_000).unwrap();
+            assert_eq!(fee, 0);
+            assert_eq!(net, 1_000_000);
+        });
     }
 
     #[test]
     fn calculate_fee_50_bps_on_1m() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-        set_fee_bps(&env, 50).unwrap();
+        with_contract(|env| {
+            init_admin(env, &Address::generate(env));
+            set_fee_bps(env, 50).unwrap();
 
-        // 1_000_000 * 50 / 10_000 = 5_000
-        let (fee, net) = calculate_fee(&env, 1_000_000).unwrap();
-        assert_eq!(fee, 5_000);
-        assert_eq!(net, 995_000);
+            // 1_000_000 * 50 / 10_000 = 5_000
+            let (fee, net) = calculate_fee(env, 1_000_000).unwrap();
+            assert_eq!(fee, 5_000);
+            assert_eq!(net, 995_000);
+        });
     }
 
     #[test]
     fn calculate_fee_100_bps_on_1m() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-        set_fee_bps(&env, 100).unwrap(); // 1%
+        with_contract(|env| {
+            init_admin(env, &Address::generate(env));
+            set_fee_bps(env, 100).unwrap(); // 1%
 
-        let (fee, net) = calculate_fee(&env, 1_000_000).unwrap();
-        assert_eq!(fee, 10_000);
-        assert_eq!(net, 990_000);
+            let (fee, net) = calculate_fee(env, 1_000_000).unwrap();
+            assert_eq!(fee, 10_000);
+            assert_eq!(net, 990_000);
+        });
     }
 
     #[test]
     fn calculate_fee_floors_on_small_amounts() {
-        let env = setup_env();
-        let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenTransferActive, &false);
-        set_fee_bps(&env, 50).unwrap();
+        with_contract(|env| {
+            init_admin(env, &Address::generate(env));
+            set_fee_bps(env, 50).unwrap();
 
-        // 100 * 50 / 10_000 = 0 (floored)
-        let (fee, net) = calculate_fee(&env, 100).unwrap();
-        assert_eq!(fee, 0);
-        assert_eq!(net, 100);
+            // 100 * 50 / 10_000 = 0 (floored)
+            let (fee, net) = calculate_fee(env, 100).unwrap();
+            assert_eq!(fee, 0);
+            assert_eq!(net, 100);
+        });
     }
 }

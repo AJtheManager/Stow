@@ -3,8 +3,9 @@
 #![allow(clippy::doc_lazy_continuation)]
 //!
 //! Sensitive admin operations cannot execute immediately. Instead, the admin
-//! _queues_ an action — storing a payload and an ETA (current ledger timestamp
-//! + configured delay) — and may only _execute_ it after the ETA passes.
+//! _queues_ an action — storing a payload and an ETA (the current ledger
+//! timestamp plus the configured delay) — and may only _execute_ it after the
+//! ETA passes.
 //! Actions also have a grace period after which they expire and can no longer
 //! be executed.
 //!

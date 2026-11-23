@@ -75,6 +75,54 @@ pub struct FlexibleAccount {
     pub updated_at: u64,
 }
 
+/// Interval used by a recurring deposit. Monthly means a fixed 30-day period.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecurringFrequency {
+    Daily,
+    Weekly,
+    Monthly,
+}
+
+impl RecurringFrequency {
+    pub fn seconds(self) -> u64 {
+        match self {
+            Self::Daily => 86_400,
+            Self::Weekly => 604_800,
+            Self::Monthly => 2_592_000,
+        }
+    }
+}
+
+/// One recurring wallet deposit schedule per owner.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecurringDeposit {
+    pub owner: Address,
+    pub amount: i128,
+    pub frequency: RecurringFrequency,
+    /// Ledger timestamp at or after which the next deposit may execute.
+    pub next_execution: u64,
+}
+
+/// A pending threshold-approved withdrawal from a group pool.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroupWithdrawalRequest {
+    pub id: u64,
+    pub group_id: u64,
+    pub requester: Address,
+    pub recipient: Address,
+    pub amount: i128,
+    /// Number of distinct group-member approvals required for execution.
+    pub threshold: u32,
+    /// Distinct member approvals received so far.
+    pub approvers: Vec<Address>,
+    pub expires_at: u64,
+    pub rejected: bool,
+    pub executed: bool,
+}
+
 /// A locked savings plan: funds cannot be withdrawn until `unlock_at`.
 #[contracttype]
 #[derive(Clone)]
@@ -257,6 +305,202 @@ pub struct InsuranceClaimRecord {
     pub redeemed: bool,
 }
 
+/// Permission level granted to a delegate for savings management.
+///
+/// Variants are ordered by capability: `ViewOnly < Deposit < Full`, so a
+/// derived `Ord` comparison ("does this level include that level?") matches
+/// the intuitive hierarchy. See [`crate::delegation`].
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum PermissionLevel {
+    /// Read-only access to the owner's savings accounts.
+    ViewOnly,
+    /// Can deposit into the owner's flexible account on the owner's behalf.
+    /// Withdrawals are not permitted.
+    Deposit,
+    /// Full management: deposit and withdraw. Withdrawals are always sent to
+    /// the **owner's** wallet, never the delegate's.
+    Full,
+}
+
+/// A savings delegation: an owner authorizes a delegate to manage savings on
+/// their behalf at a given [`PermissionLevel`], optionally expiring at a
+/// ledger timestamp.
+///
+/// See [`crate::delegation`] for the full lifecycle (grant, update, revoke,
+/// and delegated deposit/withdraw).
+#[contracttype]
+#[derive(Clone)]
+pub struct Delegation {
+    /// The savings owner who granted this delegation.
+    pub owner: Address,
+    /// The authorized delegate address.
+    pub delegate: Address,
+    /// What the delegate is allowed to do.
+    pub level: PermissionLevel,
+    /// Ledger timestamp after which the delegation is no longer valid.
+    /// `None` means the delegation never expires on its own.
+    pub expires_at: Option<u64>,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+/// The set of admin actions that must pass through the timelock.
+///
+/// Each variant carries exactly the parameters that the underlying admin
+/// function needs, so `execute_action` can apply it without any extra
+/// context. `set_paused` is intentionally not timelocked: an emergency pause
+/// must take effect immediately.
+#[contracttype]
+#[derive(Clone)]
+pub enum TimelockAction {
+    /// Rotate the admin key. Equivalent to `set_admin(new_admin)`.
+    SetAdmin(Address),
+    /// Swap the contract Wasm. Equivalent to `upgrade(new_wasm_hash)`.
+    Upgrade(BytesN<32>),
+    /// Change the per-account deposit cap (in stroops). `0` = unlimited.
+    SetDepositCap(i128),
+    /// Change the minimum deposit (in stroops). `0` = no minimum.
+    SetMinDeposit(i128),
+    /// Change the early-withdrawal penalty, in basis points.
+    SetEarlyWithdrawPenaltyBps(u32),
+    /// Change the address that receives early-withdrawal penalties.
+    SetPenaltyRecipient(Address),
+    /// Change the minimum lock period before early withdrawal, in seconds.
+    SetMinLockPeriod(u64),
+    /// Change the annual interest rate, in basis points.
+    SetInterestRate(u32),
+    /// Change the compounding frequency for interest accounts.
+    SetInterestFrequency(CompoundFrequency),
+    /// Change the timelock delay itself, in seconds.
+    SetTimelockDelay(u64),
+}
+
+/// Lifecycle state of a queued action.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ActionStatus {
+    /// Waiting to reach the ETA (or already past it but not yet executed).
+    Pending,
+    /// Successfully applied by `execute_action`.
+    Executed,
+    /// Cancelled by the admin before execution.
+    Cancelled,
+}
+
+/// A pending (or completed) timelock entry.
+///
+/// Stored under [`DataKey::QueuedAction(id)`] in persistent storage.
+#[contracttype]
+#[derive(Clone)]
+pub struct QueuedAction {
+    /// Unique monotonic id allocated by [`DataKey::NextTimelockId`].
+    pub id: u64,
+    /// The action payload to apply at execution time.
+    pub action: TimelockAction,
+    /// Ledger timestamp before which `execute_action` is rejected
+    /// (`Error::TimelockNotReady`).
+    pub eta: u64,
+    /// Ledger timestamp after which `execute_action` is rejected
+    /// (`Error::TimelockExpired`).
+    pub expires_at: u64,
+    /// Current lifecycle state.
+    pub status: ActionStatus,
+    /// Ledger timestamp when this entry was queued.
+    pub queued_at: u64,
+}
+
+/// What a challenge participant must achieve by the deadline to win a prize.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ChallengeKind {
+    /// Total amount saved (stroops) must reach `target_amount`.
+    TotalSaved,
+    /// Number of separate deposits must reach `target_amount`.
+    Consistency,
+    /// Amount saved, in basis points of the entry stake, must reach `target_amount`.
+    GrowthRate,
+}
+
+/// Lifecycle state of a [`Challenge`].
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ChallengeStatus {
+    /// Accepting joins and savings until the deadline.
+    Open,
+    /// Every participant has settled; no funds remain to be claimed.
+    Closed,
+}
+
+/// One participant's record inside a [`Challenge`].
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChallengeParticipant {
+    pub address: Address,
+    /// Total stroops saved toward the challenge target so far.
+    pub saved: i128,
+    /// Number of separate `save` calls made by this participant.
+    pub deposits: u32,
+    /// Entry stake paid when joining (always `== challenge.entry_fee`).
+    pub fee_paid: i128,
+    /// Set once the participant has called `settle`.
+    pub settled: bool,
+}
+
+/// A savings challenge with an entry stake, a target and a deadline.
+///
+/// Stored under [`DataKey::Challenge(id)`] in persistent storage.
+#[contracttype]
+#[derive(Clone)]
+pub struct Challenge {
+    pub id: u64,
+    pub creator: Address,
+    pub kind: ChallengeKind,
+    /// Success threshold; its unit depends on `kind` (see [`ChallengeKind`]).
+    pub target_amount: i128,
+    /// Stroops each participant stakes to join.
+    pub entry_fee: i128,
+    /// Ledger timestamp after which joins and saves stop and settlement opens.
+    pub deadline: u64,
+    /// Minimum participants required before any prize is paid out.
+    pub min_participants: u32,
+    /// Protocol fee rate, in basis points, snapshotted at creation. Each
+    /// participant's fee funds the prize pool.
+    pub fee_bps: u32,
+    pub status: ChallengeStatus,
+    pub participants: Vec<ChallengeParticipant>,
+    pub created_at: u64,
+}
+
+/// Rounding granularity for automatic savings round-ups (#622).
+///
+/// Each external transaction is rounded up to the next multiple of this step;
+/// the difference is saved.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RoundupLevel {
+    /// Round to the nearest 1 unit: nothing is saved.
+    Nearest1,
+    /// Round up to the next multiple of 5.
+    Nearest5,
+    /// Round up to the next multiple of 10.
+    Nearest10,
+}
+
+/// An owner's round-up configuration and running totals.
+///
+/// Stored under [`DataKey::Roundup(owner)`] in persistent storage.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoundupConfig {
+    pub owner: Address,
+    pub level: RoundupLevel,
+    /// Sum of all external transaction amounts tracked so far, in stroops.
+    pub tracked_total: i128,
+    /// Sum of all round-up amounts deposited so far, in stroops.
+    pub deposited_total: i128,
+}
+
 /// Storage keys. One variant per logical record family.
 ///
 /// See `storage` module docs for the full storage model: durability
@@ -433,236 +677,38 @@ pub enum DataKey {
     /// contributing does not grow it. TTL: bumped on every read/write.
     GroupContribution(u64, Address),
 
-    // --- Delegation (#644) ---
-    /// `Delegation` by (owner, delegate) pair.
-    ///
-    /// Durability: persistent. TTL: bumped on every read/write.
-    Delegation(Address, Address),
-
-    // --- Fees (#430) ---
-    /// Protocol fee rate in basis points.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
+    /// Reward state by owner.
+    RewardState(Address),
+    /// Reward pool balance, in stroops.
+    RewardPoolBalance,
+    /// Admin-configured rewards parameters.
+    RewardsConfig,
+    /// Fee rate in basis points.
     FeeBps,
     /// Address that receives protocol fees.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
     FeeRecipient,
-
-    // --- Challenge (#442) ---
-    /// `Challenge` by id.
-    ///
-    /// Durability: persistent. TTL: bumped on every read/write.
+    /// Delegation by (owner, delegate).
+    Delegation(Address, Address),
+    /// Admin-configured timelock delay, in seconds.
+    TimelockDelay,
+    /// Monotonic counter for queued-action ids.
+    NextTimelockId,
+    /// Queued timelock action by id.
+    QueuedAction(u64),
+    /// Savings challenge by id.
     Challenge(u64),
     /// Monotonic counter for challenge ids.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
     NextChallengeId,
 
-    // --- Rewards (#440) ---
-    /// Admin-configurable rewards config (`RewardsConfig`).
+    /// Savings round-up configuration and totals by owner.
+    Roundup(Address),
+    /// A recurring deposit schedule keyed by its owner.
     ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
-    RewardsConfig,
-    /// Reward pool balance in token stroops.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
-    RewardPoolBalance,
-    /// Per-owner reward tracking (`RewardState`).
-    ///
-    /// Durability: persistent. TTL: bumped on every read/write.
-    RewardState(Address),
-
-    // --- Timelock (#438) ---
-    /// Configured timelock delay in seconds.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
-    TimelockDelay,
-    /// Monotonic counter for timelock action ids.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
-    NextTimelockId,
-    /// `QueuedAction` by id.
-    ///
-    /// Durability: persistent. TTL: bumped on every read/write.
-    QueuedAction(u64),
-
-    // --- Collateral (#645) ---
-    /// `CollateralState` by owner address.
-    ///
-    /// Durability: persistent. TTL: bumped on every read/write.
-    CollateralState(Address),
-    /// `LoanRecord` by loan id (embeds the backing vault owner addresses).
-    ///
-    /// Durability: persistent. TTL: bumped on every read/write.
-    LoanRecord(u64),
-    /// Monotonic counter for loan ids.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
-    NextLoanId,
-    /// Registered lender address. Present means the address is authorised to
-    /// record borrows and repayments against vaults.
-    ///
-    /// Durability: instance. TTL: bumped with rest of instance storage.
-    RegisteredLender(Address),
-}
-
-// ---------------------------------------------------------------------------
-// Delegation (#644)
-// ---------------------------------------------------------------------------
-
-/// Permission level for a delegation.
-#[contracttype]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub enum PermissionLevel {
-    ViewOnly = 0,
-    Deposit = 1,
-    Full = 2,
-}
-
-/// A delegation record: `owner` grants `delegate` access at `level`.
-#[contracttype]
-#[derive(Clone)]
-pub struct Delegation {
-    pub owner: Address,
-    pub delegate: Address,
-    pub level: PermissionLevel,
-    /// Optional expiry ledger timestamp. `None` means no expiry.
-    pub expires_at: Option<u64>,
-    pub created_at: u64,
-    pub updated_at: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Challenge (#442)
-// ---------------------------------------------------------------------------
-
-/// Status of a savings challenge.
-#[contracttype]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ChallengeStatus {
-    Open = 0,
-    Won = 1,
-    Expired = 2,
-}
-
-/// A single participant in a challenge.
-#[contracttype]
-#[derive(Clone)]
-pub struct ChallengeParticipant {
-    pub address: Address,
-    /// Amount saved toward the target so far.
-    pub saved: i128,
-    /// Entry fee paid by this participant.
-    pub fee_paid: i128,
-}
-
-/// A savings challenge record.
-#[contracttype]
-#[derive(Clone)]
-pub struct Challenge {
-    pub id: u64,
-    pub creator: Address,
-    pub target_amount: i128,
-    pub entry_fee: i128,
-    pub deadline: u64,
-    pub min_participants: u32,
-    pub prize_pool: i128,
-    pub status: ChallengeStatus,
-    pub winner: Option<Address>,
-    pub participants: Vec<ChallengeParticipant>,
-    pub created_at: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Timelock (#438)
-// ---------------------------------------------------------------------------
-
-/// Status of a queued timelock action.
-#[contracttype]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ActionStatus {
-    Pending = 0,
-    Executed = 1,
-    Cancelled = 2,
-}
-
-/// Which admin mutation the timelock guards.
-#[contracttype]
-#[derive(Clone)]
-pub enum TimelockAction {
-    SetAdmin(Address),
-    Upgrade(BytesN<32>),
-    SetDepositCap(i128),
-    SetMinDeposit(i128),
-    SetEarlyWithdrawPenaltyBps(u32),
-    SetPenaltyRecipient(Address),
-    SetMinLockPeriod(u64),
-    SetInterestRate(u32),
-    SetInterestFrequency(CompoundFrequency),
-    SetTimelockDelay(u64),
-}
-
-/// A queued timelock entry.
-#[contracttype]
-#[derive(Clone)]
-pub struct QueuedAction {
-    pub id: u64,
-    pub action: TimelockAction,
-    /// Earliest ledger timestamp at which this action may be executed.
-    pub eta: u64,
-    /// Latest ledger timestamp at which this action may be executed.
-    pub expires_at: u64,
-    pub status: ActionStatus,
-    pub queued_at: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Collateral (#645)
-// ---------------------------------------------------------------------------
-
-/// Per-vault collateral state, stored under `DataKey::CollateralState(owner)`.
-///
-/// ## Ratio model
-///
-/// `borrow_ratio_bps`      — maximum borrowed / balance, in basis points.
-///                           Default 8_000 (80 %).
-/// `liquidation_ratio_bps` — borrowed / balance threshold that triggers
-///                           liquidation, in basis points.
-///                           Default 9_000 (90 %). Must be > borrow_ratio_bps.
-///
-/// `max_borrow = balance * borrow_ratio_bps / 10_000` (rounded down).
-/// `min_balance_required  = borrowed * 10_000 / borrow_ratio_bps` (rounded up).
-/// Liquidation allowed when `borrowed * 10_000 > balance * liquidation_ratio_bps`.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct CollateralState {
-    pub owner: Address,
-    /// Whether this vault is currently enabled as collateral.
-    pub enabled: bool,
-    /// The loan id this vault is backing. `0` means not currently backing any loan.
-    pub loan_id: u64,
-    /// Amount currently borrowed against this vault, in token stroops.
-    pub borrowed: i128,
-    /// Collateral borrow ratio in basis points (e.g. 8_000 = 80 %).
-    pub borrow_ratio_bps: u32,
-    /// Liquidation threshold in basis points (e.g. 9_000 = 90 %).
-    /// Must be > `borrow_ratio_bps`.
-    pub liquidation_ratio_bps: u32,
-}
-
-/// A loan record: tracks the total borrowed against a set of collateral vaults.
-/// Stored under `DataKey::LoanRecord(loan_id)`. The backing vault owner
-/// addresses are embedded here so we don't need a separate storage key.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct LoanRecord {
-    pub loan_id: u64,
-    /// The registered lender that created this loan.
-    pub lender: Address,
-    /// Total amount borrowed against all vaults backing this loan.
-    pub total_borrowed: i128,
-    /// Owner addresses of the vaults backing this loan.
-    pub vaults: Vec<Address>,
-    pub created_at: u64,
+    /// Durability: persistent — one entry per owner. TTL is refreshed on
+    /// setup, query, execution, and cancellation.
+    RecurringDeposit(Address),
+    /// Pending multi-signature group withdrawal by request id.
+    GroupWithdrawal(u64),
+    /// Monotonic counter for multi-signature group withdrawal request ids.
+    NextGroupWithdrawalId,
 }
